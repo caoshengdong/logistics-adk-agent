@@ -1,0 +1,36 @@
+[project]
+name = "logistics-adk-agent"
+version = "0.2.0"
+description = "A Google ADK logistics agent with mock and HTTP provider seams"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Candidate Submission" }]
+dependencies = [
+  "google-adk>=1.18.0",
+  "pydantic>=2.8.0",
+  "pytest>=9.0.2",
+  "python-dotenv>=1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+  "ruff>=0.6.0",
+  "mypy>=1.10.0",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["logistics_agent*"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.mypy]
+ignore_missing_imports = true
+strict = false
