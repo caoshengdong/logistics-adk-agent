@@ -14,6 +14,20 @@ dotenv.load_dotenv(_PROJECT_ROOT / ".env")
 dotenv.load_dotenv(_BACKEND_ROOT / ".env")
 
 
+def _normalize_database_url(url: str) -> str:
+    """Ensure the DATABASE_URL uses the asyncpg driver.
+
+    Hosted providers (Render, Heroku, etc.) typically supply a URL starting
+    with ``postgres://`` or ``postgresql://``.  SQLAlchemy async requires
+    ``postgresql+asyncpg://``.
+    """
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
 class BackendSettings:
     # JWT
     jwt_secret: str = os.getenv("JWT_SECRET", "change-me-in-production")
@@ -21,9 +35,11 @@ class BackendSettings:
     jwt_expire_minutes: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24h
 
     # Database — PostgreSQL (async via asyncpg)
-    database_url: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql+asyncpg://postgres:postgres@localhost:5432/logistics",
+    database_url: str = _normalize_database_url(
+        os.getenv(
+            "DATABASE_URL",
+            "postgresql+asyncpg://postgres:postgres@localhost:5432/logistics",
+        )
     )
 
     # CORS — in production, set to the frontend's public URL
