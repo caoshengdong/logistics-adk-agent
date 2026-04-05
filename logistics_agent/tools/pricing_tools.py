@@ -1,0 +1,102 @@
+"""Pricing & channel discovery tools: price comparison, cost estimation, channels, destinations."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from logistics_agent.services.logistics_service import LogisticsService
+from logistics_agent.tools._common import get_service
+
+
+def estimate_shipping_cost(
+    channelid: str,
+    countrycode: str,
+    forecastweight: float,
+    number: int = 1,
+    isbattery: int = 0,
+    goodstypecode: str = "WPX",
+) -> dict[str, Any]:
+    """Estimate shipping cost for a specific channel (运费试算).
+
+    Args:
+        channelid: Channel code, e.g. "FEDEX-IP". Use query_channels to list available channels.
+        countrycode: Destination country ISO code, e.g. "US".
+        forecastweight: Total weight in KG.
+        number: Number of packages.
+        isbattery: Whether contains battery (0=no, 1=yes).
+        goodstypecode: Goods type (WPX/DOC/PAK).
+    """
+    try:
+        return get_service().estimate_channel_price({
+            "channelid": channelid,
+            "countrycode": countrycode,
+            "forecastweight": forecastweight,
+            "number": number,
+            "isbattery": isbattery,
+            "goodstypecode": goodstypecode,
+        })
+    except Exception as exc:
+        return LogisticsService.format_error(exc)
+
+
+def query_price(
+    dest: str,
+    weight: float,
+    piece: int = 1,
+    goodstype: str = "WPX",
+    desttype: str = "country",
+    channelid: str = "",
+) -> dict[str, Any]:
+    """Compare shipping prices across all available channels for a destination (查询报价).
+
+    Args:
+        dest: Destination code, e.g. "US", "GB", "JP". Use query_destinations to find valid codes.
+        weight: Total weight in KG.
+        piece: Total number of packages.
+        goodstype: Goods type code (WPX=包裹, DOC=文件, PAK=PAK袋).
+        desttype: Destination type — "country", "port", or "airport".
+        channelid: Optional channel code to filter results to a single channel.
+    """
+    try:
+        return get_service().query_price({
+            "dest": dest,
+            "weight": weight,
+            "piece": piece,
+            "goodstype": goodstype,
+            "desttype": desttype,
+            "channelid": channelid,
+        })
+    except Exception as exc:
+        return LogisticsService.format_error(exc)
+
+
+def query_channels() -> dict[str, Any]:
+    """List all available shipping channels (查询渠道).
+
+    Returns channel codes, names, and types. Use the channelid in other tools
+    like create_order or estimate_shipping_cost.
+    """
+    try:
+        return get_service().query_channels()
+    except Exception as exc:
+        return LogisticsService.format_error(exc)
+
+
+def query_destinations(
+    dest: str = "",
+    desttype: str = "country",
+) -> dict[str, Any]:
+    """Search supported destinations — countries, ports, or airports (查询目的地).
+
+    Args:
+        dest: Keyword to search, e.g. "US" or "美国". Leave empty to list all.
+        desttype: Type — "country", "port", or "airport".
+    """
+    try:
+        return get_service().query_destinations({
+            "dest": dest,
+            "desttype": desttype,
+        })
+    except Exception as exc:
+        return LogisticsService.format_error(exc)
+
