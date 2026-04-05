@@ -8,8 +8,10 @@ authors = [{ name = "Candidate Submission" }]
 dependencies = [
   "google-adk>=1.18.0",
   "httpx>=0.27.0",
+  "mypy>=1.19.1",
   "pydantic>=2.8.0",
   "python-dotenv>=1.0.1",
+  "ruff>=0.15.8",
 ]
 
 [project.optional-dependencies]

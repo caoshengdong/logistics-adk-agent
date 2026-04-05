@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Any, Dict
-from uuid import uuid4
+from typing import Any
 
 from logistics_agent.models.domain import (
     ChannelPriceRequest,
@@ -32,8 +31,6 @@ from logistics_agent.models.domain import (
     now_utc,
 )
 from logistics_agent.providers.base import LogisticsProvider
-
-
 
 # ---------------------------------------------------------------------------
 # Seed data helpers
@@ -189,8 +186,12 @@ def _seed_tracks() -> dict[str, T6TrackResult]:
                 responsecode="OT001",
             ),
             T6TrackEvent(
-                trackdate=(base_time - timedelta(days=2, hours=18)).strftime("%Y-%m-%d %H:%M:%S"),
-                trackdate_utc8=(base_time - timedelta(days=2, hours=18)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate=(
+                    base_time - timedelta(days=2, hours=18)
+                ).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(
+                    base_time - timedelta(days=2, hours=18)
+                ).strftime("%Y-%m-%d %H:%M:%S"),
                 location="深圳, CN",
                 info="包裹已揽收",
                 responsecode="OT001",
@@ -321,8 +322,8 @@ def _seed_tracks() -> dict[str, T6TrackResult]:
 
 @dataclass
 class MockLogisticsProvider(LogisticsProvider):
-    orders: Dict[str, T6Order] = field(default_factory=dict)
-    tracks: Dict[str, T6TrackResult] = field(default_factory=dict)
+    orders: dict[str, T6Order] = field(default_factory=dict)
+    tracks: dict[str, T6TrackResult] = field(default_factory=dict)
     _next_pkid: int = field(default=20000)
 
     def __post_init__(self) -> None:
@@ -386,10 +387,11 @@ class MockLogisticsProvider(LogisticsProvider):
         # Deduplicate orders (same order indexed by multiple keys)
         unique: dict[int, T6Order] = {}
         for o in self.orders.values():
-            if o.pkid not in unique:
-                # Simple date filter
-                if request.begcreatedate <= o.createdate <= request.endcreatedate:
-                    unique[o.pkid] = o
+            if (
+                o.pkid not in unique
+                and request.begcreatedate <= o.createdate <= request.endcreatedate
+            ):
+                unique[o.pkid] = o
 
         all_orders = sorted(unique.values(), key=lambda x: x.createdate, reverse=True)
         total = len(all_orders)
@@ -533,12 +535,30 @@ class MockLogisticsProvider(LogisticsProvider):
                 clientweight=weight,
                 number=order.number,
                 recsheetList=[
-                    T6FeeItem(sheetid=f"RS-{order.pkid}-01", costtype="FREIGHT",
-                              costtypeName="运费", amount=freight, currency="RMB", currencyName="人民币"),
-                    T6FeeItem(sheetid=f"RS-{order.pkid}-02", costtype="FUEL",
-                              costtypeName="燃油费", amount=fuel, currency="RMB", currencyName="人民币"),
-                    T6FeeItem(sheetid=f"RS-{order.pkid}-03", costtype="REGISTER",
-                              costtypeName="挂号费", amount=reg_fee, currency="RMB", currencyName="人民币"),
+                    T6FeeItem(
+                        sheetid=f"RS-{order.pkid}-01",
+                        costtype="FREIGHT",
+                        costtypeName="运费",
+                        amount=freight,
+                        currency="RMB",
+                        currencyName="人民币",
+                    ),
+                    T6FeeItem(
+                        sheetid=f"RS-{order.pkid}-02",
+                        costtype="FUEL",
+                        costtypeName="燃油费",
+                        amount=fuel,
+                        currency="RMB",
+                        currencyName="人民币",
+                    ),
+                    T6FeeItem(
+                        sheetid=f"RS-{order.pkid}-03",
+                        costtype="REGISTER",
+                        costtypeName="挂号费",
+                        amount=reg_fee,
+                        currency="RMB",
+                        currencyName="人民币",
+                    ),
                 ],
             )
             results.append(fees.model_dump(mode="json"))
@@ -557,7 +577,13 @@ class MockLogisticsProvider(LogisticsProvider):
 
         # Only allow deleting draft / predicted orders
         if order.status not in ("Draft", "Predicted"):
-            return {"code": -1, "msg": f"运单状态为「{order.statusname}」，无法删除，仅草稿和已预报状态可删除"}
+            return {
+                "code": -1,
+                "msg": (
+                    f"运单状态为「{order.statusname}」，"
+                    "无法删除，仅草稿和已预报状态可删除"
+                ),
+            }
 
         # Remove all index keys for this order
         keys_to_remove = [

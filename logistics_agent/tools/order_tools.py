@@ -1,8 +1,12 @@
 """Order lifecycle tools: create, query, delete."""
 from __future__ import annotations
+
 from typing import Any
+
 from logistics_agent.services.logistics_service import LogisticsService
 from logistics_agent.tools._common import get_service
+
+
 def create_order(
     channelid: str, customernumber1: str, countrycode: str,
     consigneename: str, consigneeaddress1: str, consigneecity: str,
@@ -41,7 +45,9 @@ def create_order(
             "forecastweight": forecastweight, "number": number,
             "isbattery": isbattery, "goodstypecode": goodstypecode,
             "consigneetel": consigneetel, "note": note,
-            "items": [{"cnname": goods_cnname, "weight": goods_weight_kg, "quantity": goods_quantity}],
+            "items": [
+                {"cnname": goods_cnname, "weight": goods_weight_kg, "quantity": goods_quantity},
+            ],
         })
     except Exception as exc:
         return LogisticsService.format_error(exc)
