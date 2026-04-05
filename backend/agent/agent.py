@@ -68,6 +68,7 @@ order_agent = Agent(
         "then show the detailed data."
     ),
     tools=[create_order, query_orders, delete_order],
+    output_key="last_order_response",
 )
 
 # ---------------------------------------------------------------------------
@@ -108,6 +109,7 @@ tracking_agent = Agent(
         "item and the total amount."
     ),
     tools=[track_shipment, get_order_fees],
+    output_key="last_tracking_response",
 )
 
 # ---------------------------------------------------------------------------
@@ -144,6 +146,7 @@ pricing_agent = Agent(
         "know you will hand off to the order specialist."
     ),
     tools=[estimate_shipping_cost, query_price, query_channels, query_destinations],
+    output_key="last_pricing_response",
 )
 
 # ---------------------------------------------------------------------------
@@ -165,6 +168,13 @@ root_agent = Agent(
         "- Customer name: {customer_name}\n"
         "(If the above fields are empty the session is in "
         "anonymous / mock mode.)\n\n"
+        "## Session Memory\n"
+        "Previous specialist responses are automatically "
+        "saved in session state (last_order_response, "
+        "last_tracking_response, last_pricing_response). "
+        "You can reference them for follow-up requests "
+        "(e.g. 'use the cheapest channel from my last quote "
+        "to place an order').\n\n"
         "Your job is to understand the user's intent and "
         "route requests to the right specialist.\n\n"
         "You have three specialist teams:\n"

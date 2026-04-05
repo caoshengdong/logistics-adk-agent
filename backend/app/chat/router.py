@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
 from app.auth.dependencies import get_current_user
-from app.chat.adk_runner import run_agent_stream
+from app.chat.adk_runner import delete_adk_session, run_agent_stream
 from app.database import get_db
 from app.models import ChatMessage, ChatSession, User
 from app.schemas import (
@@ -34,44 +34,56 @@ async def chat(
 ):
     """Stream agent response via Server-Sent Events.
 
-    The final SSE event carries ``session_id`` so the frontend knows which
-    session to associate subsequent messages with.
+    Flow:
+    1. Ensure a DB ``ChatSession`` exists (created up front so its ID can be
+       used as the ADK session ID — single ID, no mapping needed).
+    2. Load existing messages from DB (used for ADK session reconstruction
+       after a server restart).
+    3. Run the agent, streaming events to the client.
+    4. Persist the new user + assistant messages to DB.
     """
+
+    # ── 1. Ensure DB session exists ──────────────────────────────────
+    db_session = await _ensure_chat_session(db, user, body.session_id, body.message)
+    await db.commit()  # flush + commit so the ID is stable
+
+    # ── 2. Load history for session reconstruction ───────────────────
+    result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == db_session.id)
+        .order_by(ChatMessage.created_at)
+    )
+    db_messages = list(result.scalars().all())
 
     async def event_generator():
         full_response: list[str] = []
-        adk_session_id: str | None = None
 
-        async for event_type, payload in run_agent_stream(user, body.message, body.session_id):
+        async for event_type, payload in run_agent_stream(
+            user, body.message, db_session.id, db_messages
+        ):
             if event_type == "text":
                 full_response.append(payload)
                 yield f"data: {json.dumps({'type': 'text', 'content': payload})}\n\n"
             elif event_type == "text_reset":
-                # A new agent is speaking — discard previous text and tell
-                # the frontend to start fresh.
                 full_response.clear()
                 yield f"data: {json.dumps({'type': 'text_reset'})}\n\n"
             elif event_type == "tool_call":
                 yield f"data: {json.dumps({'type': 'tool_call', 'content': payload})}\n\n"
             elif event_type == "tool_result":
                 yield f"data: {json.dumps({'type': 'tool_result', 'content': payload})}\n\n"
-            elif event_type == "session_id":
-                adk_session_id = payload
 
-        # ── Persist to DB ─────────────────────────────────────────────
+        # ── 4. Persist new messages to DB ─────────────────────────────
         assistant_text = "".join(full_response)
-        db_session = await _ensure_chat_session(db, user, body.session_id, body.message)
 
         db.add(ChatMessage(session_id=db_session.id, role="user", content=body.message))
         if assistant_text:
             db.add(ChatMessage(session_id=db_session.id, role="assistant", content=assistant_text))
         await db.commit()
 
-        # Final event — carries the session id + done flag
+        # Final event — carries the session id
         done_payload = {
             "type": "done",
             "session_id": db_session.id,
-            "adk_session_id": adk_session_id or "",
         }
         yield f"data: {json.dumps(done_payload)}\n\n"
 
@@ -124,6 +136,8 @@ async def delete_session(
     db: AsyncSession = Depends(get_db),
 ):
     session = await _get_user_session(db, user, session_id)
+    # Clean up the ADK in-memory session as well
+    await delete_adk_session(user_id=user.id, session_id=session.id)
     await db.delete(session)
     await db.commit()
 
@@ -158,4 +172,3 @@ async def _ensure_chat_session(
     db.add(new_session)
     await db.flush()  # populate .id
     return new_session
-

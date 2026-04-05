@@ -30,10 +30,12 @@ def get_provider() -> LogisticsProvider:
 def get_provider_for_user(auth_code: str, auth_token: str) -> LogisticsProvider:
     """Per-user provider cached by (auth_code, auth_token) tuple.
 
-    If credentials are provided, returns an HttpLogisticsProvider bound to
-    that specific customer.  Otherwise falls back to the global provider.
+    If the backend is ``http`` and both credentials are provided, returns an
+    ``HttpLogisticsProvider`` bound to that specific customer.  Otherwise
+    falls back to the global provider (respecting the ``provider_backend``
+    setting).
     """
-    if auth_code and auth_token:
+    if settings.provider_backend == "http" and auth_code and auth_token:
         return HttpLogisticsProvider(
             base_url=settings.api_base_url,
             auth_code=auth_code,

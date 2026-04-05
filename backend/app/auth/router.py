@@ -25,6 +25,7 @@ _MOCK_EMAIL = "demo@logistics-ai.com"
 _MOCK_PASSWORD = "demo-mock-2026"
 _MOCK_DISPLAY = "Demo User"
 _MOCK_CUSTOMER_CODE = "MOCK-DEMO"
+_MOCK_AUTH_TOKEN = "mock-demo-token-2026"
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -72,7 +73,7 @@ async def mock_login(db: AsyncSession = Depends(get_db)):
             password_hash=hash_password(_MOCK_PASSWORD),
             display_name=_MOCK_DISPLAY,
             customer_code=_MOCK_CUSTOMER_CODE,
-            auth_token="",
+            auth_token=_MOCK_AUTH_TOKEN,
         )
         db.add(user)
         await db.commit()
