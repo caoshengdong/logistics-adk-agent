@@ -1,7 +1,10 @@
 # ── Backend Dockerfile (uv + FastAPI) ────────────────────────────────
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /app
+
+# Install uv
+RUN pip install --no-cache-dir uv
 
 # Install dependencies first (cache-friendly)
 COPY pyproject.toml uv.lock ./
@@ -28,4 +31,3 @@ EXPOSE 8000
 
 # Run alembic migrations then start uvicorn
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
-
