@@ -32,6 +32,5 @@ export interface SSEEvent {
   type: "text" | "text_reset" | "done" | "tool_call" | "tool_result";
   content?: string;
   session_id?: string;
-  adk_session_id?: string;
 }
 
