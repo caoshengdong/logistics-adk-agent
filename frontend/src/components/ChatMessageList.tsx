@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -158,6 +159,13 @@ export default function ChatMessageList({ messages, streaming, agentSteps, onSug
   // Filter out tool messages from history (they are transient UI state now)
   const visibleMessages = messages.filter((m) => m.role !== "tool");
 
+  // Auto-scroll: ref at the bottom of the scrollable container
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, streaming, agentSteps]);
+
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8">
       {visibleMessages.length === 0 && !streaming && <EmptyState onSuggestionClick={onSuggestionClick} />}
@@ -215,6 +223,9 @@ export default function ChatMessageList({ messages, streaming, agentSteps, onSug
 
         {/* Thinking dots — shown after user message before any response */}
         {isWaiting && <ThinkingIndicator />}
+
+        {/* Scroll anchor — must be inside the overflow-y-auto container */}
+        <div ref={bottomRef} />
       </div>
     </div>
   );

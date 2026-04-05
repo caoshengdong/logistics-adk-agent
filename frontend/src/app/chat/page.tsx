@@ -22,7 +22,6 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const pendingCommitRef = useRef<PendingCommit | null>(null);
 
   const { displayed: streamingText, pushText, reset: resetTypewriter, flush: flushTypewriter, isTyping } = useTypewriter(3);
@@ -32,9 +31,6 @@ export default function ChatPage() {
     loadSessions();
   }, [router]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingText, agentSteps]);
 
   // ── Commit pending message once typewriter finishes ──
   const commitPending = useCallback(() => {
@@ -263,7 +259,6 @@ export default function ChatPage() {
         </div>
 
         <ChatMessageList messages={messages} streaming={streamingText} agentSteps={agentSteps} onSuggestionClick={handleSend} />
-        <div ref={bottomRef} />
         <ChatInput onSend={handleSend} disabled={sending} />
       </div>
     </div>
