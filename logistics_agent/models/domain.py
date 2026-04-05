@@ -383,11 +383,18 @@ class DeleteOrderRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Generic API error
+# Domain exceptions
 # ---------------------------------------------------------------------------
 
-class ApiError(BaseModel):
-    code: str
-    message: str
-    retriable: bool = False
+class OrderNotFoundError(ValueError):
+    """Raised when a referenced order does not exist."""
+    pass
+
+
+class LogisticsApiError(RuntimeError):
+    """Raised when the logistics API returns a non-success response."""
+
+    def __init__(self, code: int, msg: str):
+        self.api_code = code
+        super().__init__(f"Logistics API error (code={code}): {msg}")
 

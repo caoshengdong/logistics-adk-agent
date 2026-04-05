@@ -182,35 +182,10 @@ python -m pytest tests/ -v
 |---|---|
 | `test_domain_validation.py` | Domain 模型校验（必填字段、零值重量、国家码大写、页码校验等） |
 | `test_logistics_service.py` | Service 层全部 9 个方法 + 错误格式化（完整生命周期测试） |
-
-示例输出：
+| `test_tools.py` | Tool 层全部 9 个工具函数（参数传递、异常处理、默认值） |
 
 ```
-tests/test_domain_validation.py::test_create_order_request_validates_required_fields    PASSED
-tests/test_domain_validation.py::test_create_order_request_rejects_zero_weight          PASSED
-tests/test_domain_validation.py::test_create_order_request_uppercases_country           PASSED
-tests/test_domain_validation.py::test_channel_price_request_rejects_empty_channelid     PASSED
-tests/test_domain_validation.py::test_price_query_request_rejects_zero_weight           PASSED
-tests/test_domain_validation.py::test_track_request_wraps_single_string                 PASSED
-tests/test_domain_validation.py::test_query_orders_request_rejects_zero_page            PASSED
-tests/test_logistics_service.py::test_query_channels                                    PASSED
-tests/test_logistics_service.py::test_query_destinations_all                            PASSED
-tests/test_logistics_service.py::test_query_destinations_filter                         PASSED
-tests/test_logistics_service.py::test_query_price                                       PASSED
-tests/test_logistics_service.py::test_estimate_channel_price                            PASSED
-tests/test_logistics_service.py::test_create_order                                      PASSED
-tests/test_logistics_service.py::test_query_orders                                      PASSED
-tests/test_logistics_service.py::test_track_shipment_by_waybill                         PASSED
-tests/test_logistics_service.py::test_track_shipment_by_systemnumber                    PASSED
-tests/test_logistics_service.py::test_track_shipment_not_found                          PASSED
-tests/test_logistics_service.py::test_get_order_fees                                    PASSED
-tests/test_logistics_service.py::test_get_order_fees_not_found                          PASSED
-tests/test_logistics_service.py::test_delete_order_predicted_status                     PASSED
-tests/test_logistics_service.py::test_delete_order_shipped_status                       PASSED
-tests/test_logistics_service.py::test_delete_order_not_found                            PASSED
-tests/test_logistics_service.py::test_format_validation_error                           PASSED
-tests/test_logistics_service.py::test_format_internal_error                             PASSED
-========================= 24 passed =========================
+========================= 38 passed =========================
 ```
 
 ### 代码检查（可选）
@@ -230,6 +205,8 @@ mypy logistics_agent/
 ```
 logistics-adk-agent/
 ├── .env                          # 环境变量配置（不提交到 Git）
+├── .env.example                  # 环境变量模板
+├── .github/workflows/ci.yml     # GitHub Actions CI
 ├── pyproject.toml                # 项目元数据与依赖
 ├── README.md
 ├── logistics_agent/
@@ -238,22 +215,21 @@ logistics-adk-agent/
 │   ├── config.py                 # 配置加载（dotenv + Settings）
 │   ├── main.py                   # CLI 快速测试脚本
 │   ├── models/
-│   │   └── domain.py             # Pydantic 数据模型（与物流系统 API 对齐）
+│   │   └── domain.py             # Pydantic 数据模型 + 领域异常
 │   ├── providers/
 │   │   ├── base.py               # Provider 抽象基类（9 个抽象方法）
 │   │   ├── factory.py            # Provider 工厂
 │   │   ├── mock_provider.py      # Mock 数据源
 │   │   └── http_provider.py      # HTTP 数据源（httpx）
 │   ├── services/
-│   │   └── logistics_service.py  # 业务逻辑层
-│   ├── tools/
-│   │   ├── _common.py            # 共享 Service 单例
-│   │   ├── order_tools.py        # 订单工具（create / query / delete）
-│   │   ├── tracking_tools.py     # 追踪工具（track / fees）
-│   │   └── pricing_tools.py      # 报价工具（estimate / price / channels / dest）
-│   └── utils/
-│       └── presenters.py         # 展示工具
+│   │   └── logistics_service.py  # 业务逻辑层（含结构化日志）
+│   └── tools/
+│       ├── _common.py            # 共享 Service 单例
+│       ├── order_tools.py        # 订单工具（create / query / delete）
+│       ├── tracking_tools.py     # 追踪工具（track / fees）
+│       └── pricing_tools.py      # 报价工具（estimate / price / channels / dest）
 └── tests/
-    ├── test_domain_validation.py # Domain 模型测试
-    └── test_logistics_service.py # Service 层测试（24 个用例）
+    ├── test_domain_validation.py # Domain 模型测试（7 个用例）
+    ├── test_logistics_service.py # Service 层测试（18 个用例）
+    └── test_tools.py             # Tool 层测试（13 个用例）
 ```

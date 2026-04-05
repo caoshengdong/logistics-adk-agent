@@ -1614,13 +1614,12 @@ wheels = [
 
 [[package]]
 name = "logistics-adk-agent"
-version = "0.2.0"
-source = { virtual = "." }
+version = "0.3.0"
+source = { editable = "." }
 dependencies = [
     { name = "google-adk" },
     { name = "httpx" },
     { name = "pydantic" },
-    { name = "pytest" },
     { name = "python-dotenv" },
 ]
 
@@ -1637,8 +1636,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "pydantic", specifier = ">=2.8.0" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6.0" },
 ]

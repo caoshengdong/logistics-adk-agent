@@ -21,6 +21,7 @@ from logistics_agent.models.domain import (
     CreateOrderRequest,
     DeleteOrderRequest,
     DestQueryParams,
+    LogisticsApiError,
     OrderFeesRequest,
     PriceQueryRequest,
     QueryOrdersRequest,
@@ -30,13 +31,6 @@ from logistics_agent.providers.base import LogisticsProvider
 
 logger = logging.getLogger(__name__)
 
-
-class LogisticsApiError(RuntimeError):
-    """Raised when the logistics API returns a non-success response."""
-
-    def __init__(self, code: int, msg: str):
-        self.api_code = code
-        super().__init__(f"Logistics API error (code={code}): {msg}")
 
 
 @dataclass
@@ -53,6 +47,16 @@ class HttpLogisticsProvider(LogisticsProvider):
             timeout=self.timeout_seconds,
             headers={"Content-Type": "application/json"},
         )
+
+    def close(self) -> None:
+        """Close the underlying httpx client and release connections."""
+        self._client.close()
+
+    def __enter__(self) -> HttpLogisticsProvider:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     # ------------------------------------------------------------------
     # Transport helpers
