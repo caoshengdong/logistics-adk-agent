@@ -207,6 +207,12 @@ async def run_agent_stream(
     # while still working when the root agent produces no text of its own.
     last_text_author: str | None = None
 
+    # In SSE streaming mode, partial events carry incremental text deltas
+    # while the final (non-partial) event carries the *full* accumulated text.
+    # If we already streamed partial deltas, we must skip the final event's
+    # text to avoid sending the content twice.
+    has_streamed_partial = False
+
     async for event in runner.run_async(
         user_id=user.id,
         session_id=session.id,
@@ -218,12 +224,26 @@ async def run_agent_stream(
 
         if event.content and event.content.parts:
             for part in event.content.parts:
-                # Stream text from both partial (incremental) and final events.
                 if part.text:
-                    if last_text_author is not None and event_author != last_text_author:
-                        yield ("text_reset", "")
-                    last_text_author = event_author
-                    yield ("text", part.text)
+                    if is_partial:
+                        # Partial event — stream the incremental delta
+                        if last_text_author is not None and event_author != last_text_author:
+                            yield ("text_reset", "")
+                            has_streamed_partial = False
+                        last_text_author = event_author
+                        has_streamed_partial = True
+                        yield ("text", part.text)
+                    else:
+                        # Final (non-partial) event — only yield if no
+                        # partials were streamed (otherwise it's a duplicate
+                        # of the already-streamed content).
+                        if not has_streamed_partial:
+                            if last_text_author is not None and event_author != last_text_author:
+                                yield ("text_reset", "")
+                            last_text_author = event_author
+                            yield ("text", part.text)
+                        # Reset for the next streaming segment
+                        has_streamed_partial = False
 
                 # Tool calls / results only appear in non-partial events;
                 # partial function_call parts are incomplete and must be
