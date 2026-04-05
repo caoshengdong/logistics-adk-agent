@@ -387,11 +387,22 @@ class MockLogisticsProvider(LogisticsProvider):
         # Deduplicate orders (same order indexed by multiple keys)
         unique: dict[int, T6Order] = {}
         for o in self.orders.values():
-            if (
-                o.pkid not in unique
-                and request.begcreatedate <= o.createdate <= request.endcreatedate
-            ):
-                unique[o.pkid] = o
+            if o.pkid not in unique:
+                # Lenient date filtering for mock: include order if its
+                # createdate falls within the requested range.
+                in_range = request.begcreatedate <= o.createdate <= request.endcreatedate
+                if in_range:
+                    unique[o.pkid] = o
+
+        # If strict filtering returned nothing, fall back to returning all
+        # orders.  This makes the demo more resilient to imprecise date
+        # ranges produced by the LLM.
+        if not unique:
+            seen: set[int] = set()
+            for o in self.orders.values():
+                if o.pkid not in seen:
+                    unique[o.pkid] = o
+                    seen.add(o.pkid)
 
         all_orders = sorted(unique.values(), key=lambda x: x.createdate, reverse=True)
         total = len(all_orders)
@@ -399,6 +410,7 @@ class MockLogisticsProvider(LogisticsProvider):
         page_orders = all_orders[start: start + request.limit]
 
         return {
+            "status": "success",
             "code": 0,
             "count": total,
             "data": [o.model_dump(mode="json") for o in page_orders],
@@ -422,7 +434,7 @@ class MockLogisticsProvider(LogisticsProvider):
             else:
                 results.append({"searchNumber": num, "errormsg": "无效的单号"})
 
-        return {"code": 0, "msg": "success", "data": results}
+        return {"status": "success", "code": 0, "msg": "success", "data": results}
 
     # --- estimate_channel_price ---
     def estimate_channel_price(self, request: ChannelPriceRequest) -> dict[str, Any]:

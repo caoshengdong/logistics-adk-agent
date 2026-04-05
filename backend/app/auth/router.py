@@ -1,4 +1,4 @@
-"""Auth routes: register, login, me, profile update."""
+"""Auth routes: register, login, mock-login, me, profile update."""
 
 from __future__ import annotations
 
@@ -19,6 +19,12 @@ from backend.app.schemas import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# ── Fixed mock user credentials ──────────────────────────────────────────
+_MOCK_EMAIL = "demo@logistics-ai.com"
+_MOCK_PASSWORD = "demo-mock-2026"
+_MOCK_DISPLAY = "Demo User"
+_MOCK_CUSTOMER_CODE = "MOCK-DEMO"
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -49,6 +55,28 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    token = create_access_token(subject=user.id)
+    return TokenResponse(access_token=token)
+
+
+@router.post("/mock-login", response_model=TokenResponse)
+async def mock_login(db: AsyncSession = Depends(get_db)):
+    """One-click demo login — auto-creates a mock user if needed."""
+    result = await db.execute(select(User).where(User.email == _MOCK_EMAIL))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        user = User(
+            email=_MOCK_EMAIL,
+            password_hash=hash_password(_MOCK_PASSWORD),
+            display_name=_MOCK_DISPLAY,
+            customer_code=_MOCK_CUSTOMER_CODE,
+            auth_token="",
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
 
     token = create_access_token(subject=user.id)
     return TokenResponse(access_token=token)
