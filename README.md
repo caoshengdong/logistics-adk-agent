@@ -15,44 +15,63 @@ API 文档：http://47.115.60.18/api/doc
 
 ## 架构设计
 
+### Multi-Agent 架构
+
 ```
-用户 ──▶ Agent 层 ──▶ Tool 层 ──▶ Service 层 ──▶ Provider 层
-              │                        │                │
-          意图解析/决策          校验/格式化       Mock / HTTP
+用户 ──▶ root_agent (总调度) ──┬──▶ order_agent    ──▶ Tool ──▶ Service ──▶ Provider
+                             ├──▶ tracking_agent  ──▶ Tool ──▶ Service ──▶ Provider
+                             └──▶ pricing_agent   ──▶ Tool ──▶ Service ──▶ Provider
 ```
+
+| 智能体 | 职责 | 工具数 |
+|---|---|---|
+| **root_agent** | 总调度：理解用户意图，路由到合适的子智能体 | — |
+| **order_agent** | 订单管理：创建运单、查询运单列表、删除运单 | 3 |
+| **tracking_agent** | 物流追踪：运单轨迹查询、费用明细查询 | 2 |
+| **pricing_agent** | 报价询价：运费试算、多渠道比价、渠道/目的地查询 | 4 |
+
+### 分层架构
 
 | 层 | 职责 |
 |---|---|
-| **Agent** | 接收用户输入，解析意图，调用工具 |
-| **Tool** | 9 个工具函数，覆盖物流系统 API 核心功能 |
+| **Agent** | Multi-Agent 协作，root_agent 路由 → 子 agent 执行 |
+| **Tool** | 9 个工具函数，按职责分布在 3 个子智能体中 |
 | **Service** | 统一校验、响应格式化、业务编排，隔离 Provider 细节 |
 | **Provider** | `MockLogisticsProvider` 提供模拟数据；`HttpLogisticsProvider` 对接真实物流系统 API |
 | **Domain** | Pydantic 模型，与物流系统 API JSON 结构对齐 |
 
-### 核心功能与工具映射
+### 子智能体与工具映射
 
-| 核心功能 | 工具 | 对应 API | 说明 |
-|---|---|---|---|
-| **查询订单状态** | `track_shipment` | `POST /api/track` | 查询轨迹与订单状态（支持运单号/系统单号/客户参考号） |
-| **查询运单** | `query_orders` | `POST /api/order/pageOrders` | 按日期分页查询运单列表 |
-| **创建货运单** | `create_order` | `POST /api/order/createForecast` | 创建运单（下单到预报） |
-| **估算运价** | `estimate_shipping_cost` | `POST /api/searchChannelPrice` | 指定渠道运费试算 |
-| **估算运价** | `query_price` | `POST /api/searchPrice` | 多渠道报价对比 |
-
-### 辅助工具
+#### order_agent — 订单管理
 
 | 工具 | 对应 API | 说明 |
 |---|---|---|
-| `query_channels` | `POST /api/order/channel` | 查询可用渠道 |
-| `query_destinations` | `GET /api/searchDest` | 查询目的地 |
-| `get_order_fees` | `POST /api/order/recsheet` | 查询运单费用明细 |
+| `create_order` | `POST /api/order/createForecast` | 创建运单（下单到预报） |
+| `query_orders` | `POST /api/order/pageOrders` | 按日期分页查询运单列表 |
 | `delete_order` | `POST /api/order/delete` | 删除运单 |
 
-设计原则：
+#### tracking_agent — 物流追踪
 
-1. Agent 保持轻量，专注解析和决策
-2. 工具保持单一职责，明确类型
-3. Mock 数据格式与真实 API 一致，方便切换
+| 工具 | 对应 API | 说明 |
+|---|---|---|
+| `track_shipment` | `POST /api/track` | 查询轨迹与订单状态（支持运单号/系统单号/客户参考号） |
+| `get_order_fees` | `POST /api/order/recsheet` | 查询运单费用明细 |
+
+#### pricing_agent — 报价询价
+
+| 工具 | 对应 API | 说明 |
+|---|---|---|
+| `estimate_shipping_cost` | `POST /api/searchChannelPrice` | 指定渠道运费试算 |
+| `query_price` | `POST /api/searchPrice` | 多渠道报价对比 |
+| `query_channels` | `POST /api/order/channel` | 查询可用渠道 |
+| `query_destinations` | `GET /api/searchDest` | 查询目的地 |
+
+### 设计原则
+
+1. **关注点分离**：每个子智能体只关注自己的领域
+2. **root_agent 不持有工具**：只负责路由，避免工具过载
+3. **工具保持单一职责**：一个函数 = 一个 API 能力
+4. **Mock 数据格式与真实 API 一致**：方便在 Mock / HTTP 之间切换
 
 ---
 
@@ -215,7 +234,7 @@ logistics-adk-agent/
 ├── README.md
 ├── logistics_agent/
 │   ├── __init__.py               # 入口，导入 agent 模块
-│   ├── agent.py                  # ADK Agent 定义（root_agent），注册 9 个工具
+│   ├── agent.py                  # Multi-Agent 定义（root + 3 个子智能体）
 │   ├── config.py                 # 配置加载（dotenv + Settings）
 │   ├── main.py                   # CLI 快速测试脚本
 │   ├── models/
@@ -228,7 +247,10 @@ logistics-adk-agent/
 │   ├── services/
 │   │   └── logistics_service.py  # 业务逻辑层
 │   ├── tools/
-│   │   └── logistics_tools.py    # ADK Tool 函数（9 个）
+│   │   ├── _common.py            # 共享 Service 单例
+│   │   ├── order_tools.py        # 订单工具（create / query / delete）
+│   │   ├── tracking_tools.py     # 追踪工具（track / fees）
+│   │   └── pricing_tools.py      # 报价工具（estimate / price / channels / dest）
 │   └── utils/
 │       └── presenters.py         # 展示工具
 └── tests/

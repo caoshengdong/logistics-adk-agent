@@ -1,52 +1,121 @@
+"""Multi-agent logistics system.
+
+Architecture:
+    root_agent (orchestrator)
+    ├── order_agent      — Order management: create / query / delete shipments
+    ├── tracking_agent   — Shipment tracking: trajectory lookup, fee breakdown
+    └── pricing_agent    — Pricing & quotation: cost estimation, multi-channel comparison, channel/destination lookup
+"""
+
 from __future__ import annotations
 
 from google.adk.agents.llm_agent import Agent
 
 from logistics_agent.config import settings
-from logistics_agent.tools.logistics_tools import (
+from logistics_agent.tools.order_tools import (
     create_order,
     delete_order,
+    query_orders,
+)
+from logistics_agent.tools.pricing_tools import (
     estimate_shipping_cost,
-    get_order_fees,
     query_channels,
     query_destinations,
-    query_orders,
     query_price,
+)
+from logistics_agent.tools.tracking_tools import (
+    get_order_fees,
     track_shipment,
 )
+
+# ---------------------------------------------------------------------------
+# Sub-agent: Order Management
+# ---------------------------------------------------------------------------
+
+order_agent = Agent(
+    model=settings.model,
+    name="order_agent",
+    description="Order management agent responsible for creating, querying, and deleting shipment orders.",
+    instruction=(
+        "You are an Order Management Specialist handling the full lifecycle of shipment orders.\n\n"
+        "Your tools:\n"
+        "- **create_order**: Create a new shipment order (forecast status). Before placing an order, "
+        "ensure all required fields are present: channel, customer reference number, "
+        "recipient info (name / address / city / zip / state / country), weight, and goods name. "
+        "If any field is missing, only ask for the missing ones.\n"
+        "- **query_orders**: Query the order list by date range with pagination.\n"
+        "- **delete_order**: Delete an order (only draft and forecast statuses are deletable).\n\n"
+        "If the user needs channel lookup or pricing, let them know you will hand off to the pricing specialist.\n"
+        "When responding: provide a concise summary first, then show the detailed data."
+    ),
+    tools=[create_order, query_orders, delete_order],
+)
+
+# ---------------------------------------------------------------------------
+# Sub-agent: Shipment Tracking
+# ---------------------------------------------------------------------------
+
+tracking_agent = Agent(
+    model=settings.model,
+    name="tracking_agent",
+    description="Shipment tracking agent responsible for trajectory lookup, order status, and fee breakdown.",
+    instruction=(
+        "You are a Shipment Tracking Specialist handling shipment visibility and cost inquiries.\n\n"
+        "Your tools:\n"
+        "- **track_shipment**: Query shipment trajectory and order status. Supports lookup by "
+        "waybill number (waybillnumber), system number (systemnumber), or customer reference (customernumber).\n"
+        "- **get_order_fees**: Query the fee breakdown for an order (freight, fuel surcharge, etc.).\n\n"
+        "When responding to tracking queries: present events in chronological order and highlight the current status.\n"
+        "When responding to fee queries: list each fee item and the total amount."
+    ),
+    tools=[track_shipment, get_order_fees],
+)
+
+# ---------------------------------------------------------------------------
+# Sub-agent: Pricing & Quotation
+# ---------------------------------------------------------------------------
+
+pricing_agent = Agent(
+    model=settings.model,
+    name="pricing_agent",
+    description="Pricing and quotation agent responsible for shipping cost estimation, multi-channel price comparison, and channel/destination lookup.",
+    instruction=(
+        "You are a Pricing & Quotation Specialist handling freight calculation and channel recommendations.\n\n"
+        "Your tools:\n"
+        "- **query_channels**: List all available shipping channels. Call this first when the user is unsure which channel to use.\n"
+        "- **query_destinations**: Search supported destinations (countries / ports / airports).\n"
+        "- **query_price**: Compare quotes across multiple channels to help the user pick the most cost-effective option.\n"
+        "- **estimate_shipping_cost**: Estimate the precise cost breakdown for a specific channel.\n\n"
+        "When responding: sort channels from lowest to highest price, and include transit time and total cost.\n"
+        "If the user wants to place an order, let them know you will hand off to the order specialist."
+    ),
+    tools=[estimate_shipping_cost, query_price, query_channels, query_destinations],
+)
+
+# ---------------------------------------------------------------------------
+# Root Agent (orchestrator)
+# ---------------------------------------------------------------------------
 
 root_agent = Agent(
     model=settings.model,
     name="logistics_agent",
-    description="跨境物流操作智能体，对接物流系统 API，支持下单、查单、追踪、报价、费用查询等操作。",
+    description="Cross-border logistics orchestrator that coordinates specialized sub-agents for shipment operations.",
     instruction=(
-        "你是一个跨境物流操作助手，帮助运营团队完成物流操作。\n\n"
-        "核心功能：查询订单状态、查询运单、创建货运单、估算运价。\n\n"
-        "你有以下工具可用：\n"
-        "- **query_channels**: 查询可用渠道列表。当用户不确定使用哪个渠道时，先调用此工具。\n"
-        "- **query_destinations**: 查询支持的目的地（国家/港口/机场）。\n"
-        "- **query_price**: 比较多个渠道的报价，帮用户选择性价比最高的方案。\n"
-        "- **estimate_shipping_cost**: 对指定渠道进行运费试算，获取精确费用明细。\n"
-        "- **create_order**: 创建运单（下单到预报状态）。下单前确保必填字段齐全：渠道、客户参考号、"
-        "收件人信息（姓名/地址/城市/邮编/省州/国家）、重量、物品名称。缺少字段时只追问缺失项。\n"
-        "- **query_orders**: 按日期范围分页查询运单列表。\n"
-        "- **track_shipment**: 查询运单轨迹和订单状态。支持按运单号(waybillnumber)、系统单号(systemnumber)、"
-        "客户参考号(customernumber)查询。\n"
-        "- **get_order_fees**: 查询运单的费用明细（运费、燃油费等）。\n"
-        "- **delete_order**: 删除运单（仅草稿和已预报状态可删除）。\n\n"
-        "回答时：先用简洁的摘要说明结果，再展示详细数据。\n"
-        "如果工具返回错误，清晰地告诉用户具体问题和建议。\n"
-        "当前环境使用 Mock 数据，除非运行时配置了真实 HTTP Provider。"
+        "You are the chief dispatcher for a cross-border logistics assistant. "
+        "Your job is to understand the user's intent and route requests to the right specialist.\n\n"
+        "You have three specialist teams:\n"
+        "1. **order_agent** (Order Specialist): handles creating, querying, and deleting shipment orders.\n"
+        "2. **tracking_agent** (Tracking Specialist): handles shipment trajectory lookup and fee breakdown.\n"
+        "3. **pricing_agent** (Pricing Specialist): handles cost estimation, multi-channel price comparison, "
+        "channel lookup, and destination lookup.\n\n"
+        "Routing rules:\n"
+        "- Order list / create order / place order / delete order → route to order_agent\n"
+        "- Track shipment / trajectory / order status / fee breakdown → route to tracking_agent\n"
+        "- Quote / shipping cost / cheapest channel / available channels / destinations → route to pricing_agent\n\n"
+        "If a request spans multiple domains (e.g. 'get a quote then place an order'), "
+        "dispatch to each specialist in sequence.\n"
+        "Consolidate the sub-agent results and reply to the user with a concise summary.\n"
+        "The current environment uses mock data unless a real HTTP provider is configured at runtime."
     ),
-    tools=[
-        create_order,
-        query_orders,
-        track_shipment,
-        estimate_shipping_cost,
-        query_price,
-        query_channels,
-        query_destinations,
-        get_order_fees,
-        delete_order,
-    ],
+    sub_agents=[order_agent, tracking_agent, pricing_agent],
 )
