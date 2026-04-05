@@ -46,6 +46,7 @@ class ChatSession(Base):
         String(32), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
     )
     title: Mapped[str] = mapped_column(String(256), nullable=False, default="New Chat")
+    state_json: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow,

@@ -52,10 +52,33 @@ _ROOT_AGENT_NAME = root_agent.name  # "logistics_agent"
 # Session management
 # ---------------------------------------------------------------------------
 
+def _refresh_session_credentials(user: User, session_id: str) -> None:
+    """Update auth state in InMemorySessionService's *internal* storage.
+
+    ``get_session()`` returns a **deep copy** of the stored session, so
+    mutating the returned object's ``.state`` is silently discarded.  We
+    must reach into the internal ``sessions`` dict to persist changes that
+    the runner (which re-fetches the session) will actually see.
+    """
+    internal = (
+        session_service.sessions
+        .get(backend_settings.adk_app_name, {})
+        .get(user.id, {})
+        .get(session_id)
+    )
+    if internal is None:
+        return
+    internal.state["auth_code"] = user.customer_code
+    internal.state["auth_token"] = user.auth_token
+    internal.state["customer_code"] = user.customer_code
+    internal.state["customer_name"] = user.display_name
+
+
 async def get_or_create_session(
     user: User,
     session_id: str,
     db_messages: list[ChatMessage] | None = None,
+    saved_state: dict[str, str] | None = None,
 ):
     """Return an existing ADK session or create one (possibly with history).
 
@@ -66,6 +89,10 @@ async def get_or_create_session(
     ``db_messages`` are supplied, the session is *reconstructed*: a fresh ADK
     session is created, and historical messages are replayed as Events so the
     LLM retains prior conversation context.
+
+    ``saved_state`` is the persisted working-memory snapshot (``last_*`` keys)
+    from the DB.  When provided it is merged into the initial state so that
+    tool-produced context survives server restarts.
     """
 
     # 1. Try to find an existing in-memory session
@@ -75,15 +102,45 @@ async def get_or_create_session(
         session_id=session_id,
     )
     if existing:
+        # Refresh credentials — the user may have updated their profile
+        # (customer_code / auth_token) since this ADK session was created.
+        # NOTE: existing is a deep copy; we must update the *internal* storage.
+        _refresh_session_credentials(user, session_id)
         return existing
 
-    # 2. Create a fresh ADK session with this exact ID
+    # 2. Create a fresh ADK session with this exact ID.
+    #    Every key referenced via {key} in any agent instruction MUST exist
+    #    in the initial state — ADK's template engine raises KeyError otherwise.
     initial_state = {
+        # ── Auth / identity (ephemeral — never persisted to DB) ──
         "auth_code": user.customer_code,
         "auth_token": user.auth_token,
         "customer_code": user.customer_code,
         "customer_name": user.display_name,
+        # ── Working-memory keys (populated by tools as they run) ──
+        "last_waybill": "",
+        "last_order_channel": "",
+        "last_order_destination": "",
+        "last_order_status": "",
+        "last_order_recipient": "",
+        "last_orders_summary": "",
+        "last_quote_summary": "",
+        "last_cheapest_channel": "",
+        "last_estimate_channel": "",
+        "last_estimate_total": "",
+        "last_tracked_waybill": "",
+        "last_tracked_status": "",
+        "last_fees_waybill": "",
+        "last_fees_total": "",
     }
+
+    # Overlay persisted working-memory snapshot so cold-start recovery
+    # restores tool-produced context (last_waybill, last_tracked_status, …).
+    # NEVER restore ephemeral auth keys from the DB — they come from the User row.
+    if saved_state:
+        for key, value in saved_state.items():
+            if key in initial_state and key not in _EPHEMERAL_KEYS:
+                initial_state[key] = value
 
     session = await session_service.create_session(
         app_name=backend_settings.adk_app_name,
@@ -164,11 +221,19 @@ async def _replay_history(session, db_messages: list[ChatMessage]) -> None:
 # Agent execution (streaming)
 # ---------------------------------------------------------------------------
 
+# Keys that are injected fresh from the User row on every session create /
+# refresh and must NEVER be persisted in the DB state snapshot.
+_EPHEMERAL_KEYS = frozenset({
+    "auth_code", "auth_token", "customer_code", "customer_name",
+})
+
+
 async def run_agent_stream(
     user: User,
     message: str,
     session_id: str,
     db_messages: list[ChatMessage] | None = None,
+    saved_state: dict[str, str] | None = None,
 ) -> AsyncGenerator[tuple[str, str], None]:
     """Run the agent and yield ``(event_type, payload)`` tuples.
 
@@ -183,6 +248,9 @@ async def run_agent_stream(
     db_messages : list[ChatMessage] | None
         Existing messages for this session (from DB). Used to reconstruct
         the ADK session if it was lost from memory.
+    saved_state : dict[str, str] | None
+        Persisted working-memory snapshot (``last_*`` keys) from the DB.
+        Used to restore state on cold start.
 
     Yields
     ------
@@ -191,9 +259,10 @@ async def run_agent_stream(
         ``("text_reset", "")``           — new speaker; clear accumulated text
         ``("tool_call", json_string)``   — agent invoked a tool
         ``("tool_result", json_string)`` — tool returned a result
+        ``("state_snapshot", json)``     — working-memory snapshot for persistence
         ``("session_id", id)``           — final event with session id
     """
-    session = await get_or_create_session(user, session_id, db_messages)
+    session = await get_or_create_session(user, session_id, db_messages, saved_state)
 
     content = types.Content(role="user", parts=[types.Part(text=message)])
 
@@ -267,6 +336,20 @@ async def run_agent_stream(
                         "name": fr.name,
                         "response": resp_str,
                     }))
+
+    # ── Snapshot working-memory state for DB persistence ──
+    # Re-fetch the session to get the latest state (after tool mutations).
+    final_session = await session_service.get_session(
+        app_name=backend_settings.adk_app_name,
+        user_id=user.id,
+        session_id=session.id,
+    )
+    if final_session:
+        working_memory = {
+            k: v for k, v in final_session.state.items()
+            if k.startswith("last_") and k not in _EPHEMERAL_KEYS
+        }
+        yield ("state_snapshot", _json.dumps(working_memory, ensure_ascii=False))
 
     # Always tell the caller which session this belongs to
     yield ("session_id", session.id)

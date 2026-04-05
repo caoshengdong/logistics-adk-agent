@@ -10,6 +10,12 @@ from agent.services.logistics_service import LogisticsService
 from agent.tools._common import resolve_service
 
 
+def _save_state(tool_context: ToolContext | None, key: str, value: Any) -> None:
+    """Write a value into ADK session state (for cross-agent context sharing)."""
+    if tool_context is not None:
+        tool_context.state[key] = value
+
+
 def create_order(
     channelid: str, customernumber1: str, countrycode: str,
     consigneename: str, consigneeaddress1: str, consigneecity: str,
@@ -40,7 +46,7 @@ def create_order(
         note: Order remark.
     """
     try:
-        return resolve_service(tool_context).create_order({
+        result = resolve_service(tool_context).create_order({
             "channelid": channelid, "customernumber1": customernumber1,
             "countrycode": countrycode, "consigneename": consigneename,
             "consigneeaddress1": consigneeaddress1,
@@ -53,6 +59,17 @@ def create_order(
                 {"cnname": goods_cnname, "weight": goods_weight_kg, "quantity": goods_quantity},
             ],
         })
+        # ── Compress into state for follow-up turns ──
+        if result.get("status") == "success" and result.get("data"):
+            item = result["data"][0]
+            _save_state(tool_context, "last_waybill", item.get("waybillnumber", ""))
+            _save_state(tool_context, "last_order_channel", channelid)
+            _save_state(tool_context, "last_order_destination", countrycode)
+            _save_state(tool_context, "last_order_status", "Predicted")
+            _save_state(tool_context, "last_order_recipient", consigneename)
+            # New order invalidates any cached order list
+            _save_state(tool_context, "last_orders_summary", "")
+        return result
     except Exception as exc:
         return LogisticsService.format_error(exc)
 
@@ -80,10 +97,20 @@ def query_orders(
     if not begcreatedate:
         begcreatedate = (now - timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S")
     try:
-        return resolve_service(tool_context).query_orders({
+        result = resolve_service(tool_context).query_orders({
             "begcreatedate": begcreatedate, "endcreatedate": endcreatedate,
             "page": page, "limit": limit,
         })
+        # ── Compress into state: compact order summary ──
+        if result.get("status") == "success":
+            orders = result.get("data", [])
+            summary = [
+                f"{o.get('waybillnumber','?')}|{o.get('statusname','?')}|{o.get('countrycode','?')}"
+                for o in orders[:10]
+            ]
+            _save_state(tool_context, "last_orders_summary",
+                        f"{result.get('count', 0)} orders: " + ", ".join(summary))
+        return result
     except Exception as exc:
         return LogisticsService.format_error(exc)
 
@@ -98,6 +125,17 @@ def delete_order(
         number_type: "customernumber", "waybillnumber", or "systemnumber".
     """
     try:
-        return resolve_service(tool_context).delete_order({number_type: number})
+        result = resolve_service(tool_context).delete_order({number_type: number})
+        # ── Clear stale order state so follow-ups don't reference the
+        #    deleted order (e.g. "track it" after deletion). ──
+        if result.get("status") == "success":
+            _save_state(tool_context, "last_waybill", "")
+            _save_state(tool_context, "last_order_channel", "")
+            _save_state(tool_context, "last_order_destination", "")
+            _save_state(tool_context, "last_order_status", "")
+            _save_state(tool_context, "last_order_recipient", "")
+            # Deletion invalidates the cached order list
+            _save_state(tool_context, "last_orders_summary", "")
+        return result
     except Exception as exc:
         return LogisticsService.format_error(exc)
