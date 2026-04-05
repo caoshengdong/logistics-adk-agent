@@ -129,10 +129,7 @@ async def _replay_history(session, db_messages: list[ChatMessage]) -> None:
     This allows the LLM to see the full conversation history even after a
     server restart wiped the ``InMemorySessionService``.
     """
-    invocation_counter = 0
-
-    for msg in db_messages:
-        invocation_counter += 1
+    for invocation_counter, msg in enumerate(db_messages, start=1):
         invocation_id = f"history-{invocation_counter}"
 
         if msg.role == "user":
