@@ -10,15 +10,15 @@ from __future__ import annotations
 import asyncio
 import json as _json
 import logging
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
+from agent.agent import root_agent
 from app.config import backend_settings
 from app.models import User
-from agent.agent import root_agent
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,10 @@ async def run_agent_stream(
                 # Tool response — forward from any agent
                 if part.function_response:
                     fr = part.function_response
-                    resp_str = _json.dumps(fr.response if fr.response else {}, ensure_ascii=False, default=str)
+                    resp_str = _json.dumps(
+                        fr.response if fr.response else {},
+                        ensure_ascii=False, default=str,
+                    )
                     if len(resp_str) > 800:
                         resp_str = resp_str[:800] + "…"
                     yield ("tool_result", _json.dumps({

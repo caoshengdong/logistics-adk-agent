@@ -68,7 +68,12 @@ async def chat(
         await db.commit()
 
         # Final event — carries the session id + done flag
-        yield f"data: {json.dumps({'type': 'done', 'session_id': db_session.id, 'adk_session_id': adk_session_id or ''})}\n\n"
+        done_payload = {
+            "type": "done",
+            "session_id": db_session.id,
+            "adk_session_id": adk_session_id or "",
+        }
+        yield f"data: {json.dumps(done_payload)}\n\n"
 
     return StreamingResponse(
         event_generator(),

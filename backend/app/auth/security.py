@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from jose import JWTError, jwt
+from jose import jwt
 
 from app.config import backend_settings
 
@@ -25,10 +25,14 @@ def create_access_token(subject: str, extra: dict | None = None) -> str:
     payload = {"sub": subject, "exp": expire}
     if extra:
         payload.update(extra)
-    return jwt.encode(payload, backend_settings.jwt_secret, algorithm=backend_settings.jwt_algorithm)
+    return jwt.encode(
+        payload, backend_settings.jwt_secret, algorithm=backend_settings.jwt_algorithm,
+    )
 
 
 def decode_access_token(token: str) -> dict:
     """Return payload dict or raise JWTError."""
-    return jwt.decode(token, backend_settings.jwt_secret, algorithms=[backend_settings.jwt_algorithm])
+    return jwt.decode(
+        token, backend_settings.jwt_secret, algorithms=[backend_settings.jwt_algorithm],
+    )
 

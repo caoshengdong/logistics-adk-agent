@@ -6,7 +6,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
 
-
 # ── Auth ──────────────────────────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):

@@ -90,7 +90,7 @@ class TestOrderTools:
         svc = _mock_service()
         mock_resolve.return_value = svc
 
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from agent.tools.order_tools import query_orders
         query_orders()  # no dates provided
