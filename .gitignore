@@ -566,3 +566,8 @@ cython_debug/
 .ruff_cache/
 .venv/
 
+# Frontend (Next.js)
+frontend/.next/
+frontend/node_modules/
+*.tsbuildinfo
+

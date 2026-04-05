@@ -1,6 +1,6 @@
 [project]
 name = "logistics-adk-agent"
-version = "0.3.0"
+version = "0.4.0"
 description = "A Google ADK multi-agent system for cross-border logistics operations"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -8,10 +8,17 @@ authors = [{ name = "Candidate Submission" }]
 dependencies = [
   "google-adk>=1.18.0",
   "httpx>=0.27.0",
-  "mypy>=1.19.1",
   "pydantic>=2.8.0",
   "python-dotenv>=1.0.1",
-  "ruff>=0.15.8",
+  # --- Backend (FastAPI) ---
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "sqlalchemy[asyncio]>=2.0.0",
+  "aiosqlite>=0.20.0",
+  "python-jose[cryptography]>=3.3.0",
+  "bcrypt>=4.0.0",
+  "python-multipart>=0.0.9",
+  "pydantic[email]>=2.8.0",
 ]
 
 [project.optional-dependencies]
@@ -29,7 +36,7 @@ build-backend = "setuptools.build_meta"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["logistics_agent*"]
+include = ["logistics_agent*", "backend*"]
 
 [tool.ruff]
 line-length = 100

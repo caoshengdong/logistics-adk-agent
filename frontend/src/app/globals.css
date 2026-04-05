@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: 217 91% 60%;
+  --accent-dark: 217 91% 50%;
+}
+
+body {
+  @apply bg-gradient-to-br from-slate-50 via-white to-blue-50/40 text-gray-800 antialiased;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-gray-200/80 rounded-full hover:bg-gray-300; }
+
+/* Sidebar scrollbar */
+.dark-scrollbar::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full hover:bg-white/20; }
+.dark-scrollbar::-webkit-scrollbar-track { background: transparent; }
+
+/* Markdown prose in chat */
+.prose pre {
+  @apply bg-gray-900 text-gray-100 rounded-xl text-xs overflow-x-auto p-4 my-3;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.3);
+}
+.prose code {
+  @apply text-xs px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded-md font-mono;
+  font-size: 0.8em;
+}
+.prose pre code { @apply bg-transparent text-gray-100 p-0; }
+.prose table { @apply text-xs border-collapse; }
+.prose table th { @apply bg-gray-50 font-semibold text-gray-600 px-3 py-2 border border-gray-200; }
+.prose table td { @apply px-3 py-2 border border-gray-100; }
+.prose p { @apply mb-2 last:mb-0; }
+.prose ul, .prose ol { @apply mb-2; }
+.prose blockquote { @apply border-l-4 border-blue-400 bg-blue-50/50 px-4 py-2 rounded-r-lg text-gray-600 italic; }
+.prose h1, .prose h2, .prose h3 { @apply font-semibold text-gray-900; }
+.prose a { @apply text-blue-600 underline decoration-blue-300 hover:decoration-blue-500 transition-colors; }
+
+/* Tool call card animation */
+@keyframes tool-slide-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.tool-card { animation: tool-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Streaming cursor */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  @apply bg-blue-500 ml-0.5 rounded-full;
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+}
+
+/* Thinking dots animation */
+@keyframes thinking {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+.thinking-dot {
+  @apply w-1.5 h-1.5 bg-blue-500 rounded-full inline-block mx-0.5;
+  animation: thinking 1.4s infinite ease-in-out both;
+}
+.thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+.thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+.thinking-dot:nth-child(3) { animation-delay: 0s; }
+
+/* Fade-in for messages */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.msg-appear { animation: fade-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Gradient button */
+.btn-primary {
+  @apply bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium
+         rounded-xl shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30
+         hover:from-blue-500 hover:to-indigo-500
+         transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+/* Card */
+.card {
+  @apply bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100/80;
+}
+
+/* Input field */
+.input-field {
+  @apply w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white
+         focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400
+         outline-none transition-all duration-200 text-sm;
+}
+
+/* Glass effect */
+.glass {
+  @apply bg-white/70 backdrop-blur-xl border border-white/20;
+}
+
+/* Sidebar active item glow */
+.sidebar-active {
+  @apply bg-white/10 text-white;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+

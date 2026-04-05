@@ -10,6 +10,7 @@ from logistics_agent.providers.mock_provider import MockLogisticsProvider
 
 @lru_cache(maxsize=1)
 def get_provider() -> LogisticsProvider:
+    """Global provider using env-level credentials (backward compatible)."""
     if settings.provider_backend == "http":
         if not settings.auth_code or not settings.auth_token:
             raise ValueError(
@@ -23,3 +24,21 @@ def get_provider() -> LogisticsProvider:
             timeout_seconds=settings.http_timeout_seconds,
         )
     return MockLogisticsProvider()
+
+
+@lru_cache(maxsize=64)
+def get_provider_for_user(auth_code: str, auth_token: str) -> LogisticsProvider:
+    """Per-user provider cached by (auth_code, auth_token) tuple.
+
+    If credentials are provided, returns an HttpLogisticsProvider bound to
+    that specific customer.  Otherwise falls back to the global provider.
+    """
+    if auth_code and auth_token:
+        return HttpLogisticsProvider(
+            base_url=settings.api_base_url,
+            auth_code=auth_code,
+            auth_token=auth_token,
+            timeout_seconds=settings.http_timeout_seconds,
+        )
+    return get_provider()
+

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from google.adk.tools import ToolContext
+
 from logistics_agent.services.logistics_service import LogisticsService
-from logistics_agent.tools._common import get_service
+from logistics_agent.tools._common import resolve_service
 
 
 def estimate_shipping_cost(
@@ -15,6 +17,7 @@ def estimate_shipping_cost(
     number: int = 1,
     isbattery: int = 0,
     goodstypecode: str = "WPX",
+    tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Estimate shipping cost for a specific channel (运费试算).
 
@@ -27,7 +30,7 @@ def estimate_shipping_cost(
         goodstypecode: Goods type (WPX/DOC/PAK).
     """
     try:
-        return get_service().estimate_channel_price({
+        return resolve_service(tool_context).estimate_channel_price({
             "channelid": channelid,
             "countrycode": countrycode,
             "forecastweight": forecastweight,
@@ -46,6 +49,7 @@ def query_price(
     goodstype: str = "WPX",
     desttype: str = "country",
     channelid: str = "",
+    tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Compare shipping prices across all available channels for a destination (查询报价).
 
@@ -58,7 +62,7 @@ def query_price(
         channelid: Optional channel code to filter results to a single channel.
     """
     try:
-        return get_service().query_price({
+        return resolve_service(tool_context).query_price({
             "dest": dest,
             "weight": weight,
             "piece": piece,
@@ -70,14 +74,16 @@ def query_price(
         return LogisticsService.format_error(exc)
 
 
-def query_channels() -> dict[str, Any]:
+def query_channels(
+    tool_context: ToolContext | None = None,
+) -> dict[str, Any]:
     """List all available shipping channels (查询渠道).
 
     Returns channel codes, names, and types. Use the channelid in other tools
     like create_order or estimate_shipping_cost.
     """
     try:
-        return get_service().query_channels()
+        return resolve_service(tool_context).query_channels()
     except Exception as exc:
         return LogisticsService.format_error(exc)
 
@@ -85,6 +91,7 @@ def query_channels() -> dict[str, Any]:
 def query_destinations(
     dest: str = "",
     desttype: str = "country",
+    tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Search supported destinations — countries, ports, or airports (查询目的地).
 
@@ -93,7 +100,7 @@ def query_destinations(
         desttype: Type — "country", "port", or "airport".
     """
     try:
-        return get_service().query_destinations({
+        return resolve_service(tool_context).query_destinations({
             "dest": dest,
             "desttype": desttype,
         })

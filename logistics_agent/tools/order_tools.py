@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from google.adk.tools import ToolContext
+
 from logistics_agent.services.logistics_service import LogisticsService
-from logistics_agent.tools._common import get_service
+from logistics_agent.tools._common import resolve_service
 
 
 def create_order(
@@ -14,6 +16,7 @@ def create_order(
     forecastweight: float, goods_cnname: str, goods_weight_kg: float,
     goods_quantity: int = 1, number: int = 1, isbattery: int = 0,
     goodstypecode: str = "WPX", consigneetel: str = "", note: str = "",
+    tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Create a new logistics order (运单) and submit it to forecast status.
     Args:
@@ -36,7 +39,7 @@ def create_order(
         note: Order remark.
     """
     try:
-        return get_service().create_order({
+        return resolve_service(tool_context).create_order({
             "channelid": channelid, "customernumber1": customernumber1,
             "countrycode": countrycode, "consigneename": consigneename,
             "consigneeaddress1": consigneeaddress1,
@@ -51,8 +54,11 @@ def create_order(
         })
     except Exception as exc:
         return LogisticsService.format_error(exc)
+
+
 def query_orders(
     begcreatedate: str, endcreatedate: str, page: int = 1, limit: int = 10,
+    tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Query orders by creation date range with pagination (分页查询运单).
     Args:
@@ -62,19 +68,24 @@ def query_orders(
         limit: Number of orders per page (max 100).
     """
     try:
-        return get_service().query_orders({
+        return resolve_service(tool_context).query_orders({
             "begcreatedate": begcreatedate, "endcreatedate": endcreatedate,
             "page": page, "limit": limit,
         })
     except Exception as exc:
         return LogisticsService.format_error(exc)
-def delete_order(number: str, number_type: str = "customernumber") -> dict[str, Any]:
+
+
+def delete_order(
+    number: str, number_type: str = "customernumber",
+    tool_context: ToolContext | None = None,
+) -> dict[str, Any]:
     """Delete an unshipped order. Only draft or forecast status can be deleted (删除运单).
     Args:
         number: The order number to delete.
         number_type: "customernumber", "waybillnumber", or "systemnumber".
     """
     try:
-        return get_service().delete_order({number_type: number})
+        return resolve_service(tool_context).delete_order({number_type: number})
     except Exception as exc:
         return LogisticsService.format_error(exc)
