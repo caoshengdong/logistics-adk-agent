@@ -28,14 +28,23 @@ class LogisticsService:
     # ----- 下单 -----
     def create_order(self, payload: dict[str, Any]) -> dict[str, Any]:
         request = CreateOrderRequest.model_validate(payload)
-        logger.info("create_order channel=%s customer_ref=%s", request.channelid, request.customernumber1)
+        logger.info(
+            "create_order channel=%s customer_ref=%s",
+            request.channelid,
+            request.customernumber1,
+        )
         result = self.provider.create_order(request)
         return {"status": "success", **result}
 
     # ----- 查询运单 -----
     def query_orders(self, payload: dict[str, Any]) -> dict[str, Any]:
         request = QueryOrdersRequest.model_validate(payload)
-        logger.info("query_orders range=[%s, %s] page=%d", request.begcreatedate, request.endcreatedate, request.page)
+        logger.info(
+            "query_orders range=[%s, %s] page=%d",
+            request.begcreatedate,
+            request.endcreatedate,
+            request.page,
+        )
         result = self.provider.query_orders(request)
         return {"status": "success", **result}
 
@@ -49,7 +58,12 @@ class LogisticsService:
     # ----- 运费试算（指定渠道） -----
     def estimate_channel_price(self, payload: dict[str, Any]) -> dict[str, Any]:
         request = ChannelPriceRequest.model_validate(payload)
-        logger.info("estimate_channel_price channel=%s country=%s weight=%s", request.channelid, request.countrycode, request.forecastweight)
+        logger.info(
+            "estimate_channel_price channel=%s country=%s weight=%s",
+            request.channelid,
+            request.countrycode,
+            request.forecastweight,
+        )
         result = self.provider.estimate_channel_price(request)
         return {"status": "success", **result}
 

@@ -13,7 +13,8 @@ def get_provider() -> LogisticsProvider:
     if settings.provider_backend == "http":
         if not settings.auth_code or not settings.auth_token:
             raise ValueError(
-                "LOGISTICS_PROVIDER_BACKEND=http requires LOGISTICS_AUTH_CODE and LOGISTICS_AUTH_TOKEN"
+                "LOGISTICS_PROVIDER_BACKEND=http requires "
+                "LOGISTICS_AUTH_CODE and LOGISTICS_AUTH_TOKEN"
             )
         return HttpLogisticsProvider(
             base_url=settings.api_base_url,

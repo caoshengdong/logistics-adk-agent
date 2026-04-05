@@ -9,10 +9,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -201,9 +200,9 @@ class T6Order(BaseModel):
 
 class TrackRequest(BaseModel):
     """Track request — exactly one of the three number lists should be set."""
-    waybillnumber: Optional[list[str]] = None
-    systemnumber: Optional[list[str]] = None
-    customernumber: Optional[list[str]] = None
+    waybillnumber: list[str] | None = None
+    systemnumber: list[str] | None = None
+    customernumber: list[str] | None = None
 
     @field_validator("waybillnumber", "systemnumber", "customernumber", mode="before")
     @classmethod
@@ -339,7 +338,7 @@ class T6Destination(BaseModel):
 # ---------------------------------------------------------------------------
 
 class OrderFeesRequest(BaseModel):
-    waybillnumber: Optional[list[str]] = None
+    waybillnumber: list[str] | None = None
 
     @field_validator("waybillnumber", mode="before")
     @classmethod

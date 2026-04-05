@@ -18,7 +18,6 @@ from logistics_agent.tools.tracking_tools import (
     track_shipment,
 )
 
-
 if __name__ == "__main__":
     demos = {
         "1_query_channels": query_channels(),
