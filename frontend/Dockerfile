@@ -1,9 +1,12 @@
 # ── Frontend Dockerfile (Next.js) ────────────────────────────────────
 #
-# Build-time env: NEXT_PUBLIC_API_URL (the backend's public URL)
-#   docker build --build-arg NEXT_PUBLIC_API_URL=https://api.example.com/api .
+# Build args (set via Render environment variables):
+#   BACKEND_URL          — backend origin for Next.js rewrite proxy
+#                          e.g. "https://logistics-backend.onrender.com"
+#   NEXT_PUBLIC_API_URL  — (alternative) client-side direct mode
+#                          e.g. "https://logistics-backend.onrender.com/api"
 #
-# If not set, the frontend falls back to /api (dev proxy mode).
+# If neither is set, the frontend falls back to /api → localhost:8000.
 # ─────────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
@@ -19,9 +22,11 @@ COPY . .
 # Ensure public/ exists (git doesn't track empty directories)
 RUN mkdir -p public
 
-# Accept the backend URL as a build arg so Next.js can inline it into
-# the client bundle via the NEXT_PUBLIC_ prefix convention.
+# Accept build args so next.config.js rewrites and NEXT_PUBLIC_ inlining
+# pick up the correct values during `next build`.
+ARG BACKEND_URL
 ARG NEXT_PUBLIC_API_URL
+ENV BACKEND_URL=$BACKEND_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 RUN npm run build
