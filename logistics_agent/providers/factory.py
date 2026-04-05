@@ -11,13 +11,14 @@ from logistics_agent.providers.mock_provider import MockLogisticsProvider
 @lru_cache(maxsize=1)
 def get_provider() -> LogisticsProvider:
     if settings.provider_backend == "http":
-        if not settings.api_base_url or not settings.api_key:
+        if not settings.auth_code or not settings.auth_token:
             raise ValueError(
-                "LOGISTICS_PROVIDER_BACKEND=http requires LOGISTICS_API_BASE_URL and LOGISTICS_API_KEY"
+                "LOGISTICS_PROVIDER_BACKEND=http requires LOGISTICS_AUTH_CODE and LOGISTICS_AUTH_TOKEN"
             )
         return HttpLogisticsProvider(
             base_url=settings.api_base_url,
-            api_key=settings.api_key,
+            auth_code=settings.auth_code,
+            auth_token=settings.auth_token,
             timeout_seconds=settings.http_timeout_seconds,
         )
     return MockLogisticsProvider()

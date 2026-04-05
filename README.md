@@ -1,11 +1,13 @@
 # Logistics ADK Agent
 
-基于 [Google ADK](https://google.github.io/adk-docs/) 构建的物流操作智能体，能够与物流 API 交互，完成查询订单状态、查询运单、创建货运单和估算运价等功能。
+基于 [Google ADK](https://google.github.io/adk-docs/) 构建的跨境物流操作智能体，能够与物流 API 交互，完成**查询订单状态**、**查询运单**、**创建货运单**和**估算运价**等功能。
 
 示例对话：
 
-- "查询订单 #12345 的运输状态"
-- "创建从深圳到洛杉矶的新货运单"
+- "帮我查一下运单 T6W20260401002 的轨迹"
+- "10KG 包裹发美国，各渠道报价对比一下"
+- "用 DHL 渠道创建一个发往英国的运单"
+- "查一下最近一周的运单列表"
 
 API 文档：http://47.115.60.18/api/doc
 
@@ -22,16 +24,35 @@ API 文档：http://47.115.60.18/api/doc
 | 层 | 职责 |
 |---|---|
 | **Agent** | 接收用户输入，解析意图，调用工具 |
-| **Tool** | 四个工具函数：查询订单运输状态、查询运单状态、创建货运单、估算运价 |
+| **Tool** | 9 个工具函数，覆盖物流系统 API 核心功能 |
 | **Service** | 统一校验、响应格式化、业务编排，隔离 Provider 细节 |
-| **Provider** | `MockLogisticsProvider` 提供可重复的模拟数据；`HttpLogisticsProvider` 接入真实系统 |
-| **Domain** | Pydantic 模型，定义货运单等核心数据结构 |
+| **Provider** | `MockLogisticsProvider` 提供模拟数据；`HttpLogisticsProvider` 对接真实物流系统 API |
+| **Domain** | Pydantic 模型，与物流系统 API JSON 结构对齐 |
+
+### 核心功能与工具映射
+
+| 核心功能 | 工具 | 对应 API | 说明 |
+|---|---|---|---|
+| **查询订单状态** | `track_shipment` | `POST /api/track` | 查询轨迹与订单状态（支持运单号/系统单号/客户参考号） |
+| **查询运单** | `query_orders` | `POST /api/order/pageOrders` | 按日期分页查询运单列表 |
+| **创建货运单** | `create_order` | `POST /api/order/createForecast` | 创建运单（下单到预报） |
+| **估算运价** | `estimate_shipping_cost` | `POST /api/searchChannelPrice` | 指定渠道运费试算 |
+| **估算运价** | `query_price` | `POST /api/searchPrice` | 多渠道报价对比 |
+
+### 辅助工具
+
+| 工具 | 对应 API | 说明 |
+|---|---|---|
+| `query_channels` | `POST /api/order/channel` | 查询可用渠道 |
+| `query_destinations` | `GET /api/searchDest` | 查询目的地 |
+| `get_order_fees` | `POST /api/order/recsheet` | 查询运单费用明细 |
+| `delete_order` | `POST /api/order/delete` | 删除运单 |
 
 设计原则：
 
 1. Agent 保持轻量，专注解析和决策
 2. 工具保持单一职责，明确类型
-3. 不引入持久化
+3. Mock 数据格式与真实 API 一致，方便切换
 
 ---
 
@@ -85,8 +106,9 @@ GOOGLE_API_KEY=your-google-api-key
 LOGISTICS_PROVIDER_BACKEND=mock
 
 # 以下仅在 LOGISTICS_PROVIDER_BACKEND=http 时需要
-LOGISTICS_API_BASE_URL=https://example-logistics-api.local
-LOGISTICS_API_KEY=replace-me
+LOGISTICS_API_BASE_URL=http://47.115.60.18
+LOGISTICS_AUTH_CODE=your-client-code
+LOGISTICS_AUTH_TOKEN=your-api-token
 LOGISTICS_HTTP_TIMEOUT_SECONDS=10
 ```
 
@@ -95,9 +117,10 @@ LOGISTICS_HTTP_TIMEOUT_SECONDS=10
 | `GOOGLE_API_KEY` | Google Gemini API Key | — |
 | `GOOGLE_GENAI_USE_VERTEXAI` | 是否使用 Vertex AI | `0` |
 | `LOGISTICS_PROVIDER_BACKEND` | 数据源：`mock` 或 `http` | `mock` |
-| `LOGISTICS_AGENT_MODEL` | 使用的模型 | `gemini-3-flash-preview` |
-| `LOGISTICS_API_BASE_URL` | HTTP Provider 的 API 地址 | — |
-| `LOGISTICS_API_KEY` | HTTP Provider 的 API Key | — |
+| `LOGISTICS_AGENT_MODEL` | 使用的模型 | `gemini-2.0-flash` |
+| `LOGISTICS_API_BASE_URL` | 物流系统 API 地址 | `http://47.115.60.18` |
+| `LOGISTICS_AUTH_CODE` | 客户编码 | — |
+| `LOGISTICS_AUTH_TOKEN` | API 授权码 | — |
 | `LOGISTICS_HTTP_TIMEOUT_SECONDS` | HTTP 请求超时（秒） | `10` |
 
 ---
@@ -120,7 +143,7 @@ adk web --host localhost .
 python -m logistics_agent.main
 ```
 
-直接调用工具函数，输出 JSON 结果，用于验证 Provider 和 Service 层是否正常。
+直接调用全部 9 个工具函数，输出 JSON 结果，用于验证 Provider 和 Service 层是否正常。
 
 ---
 
@@ -138,20 +161,37 @@ python -m pytest tests/ -v
 
 | 测试文件 | 覆盖内容 |
 |---|---|
-| `test_domain_validation.py` | Domain 模型校验（非法运输模式、非正数重量等） |
-| `test_logistics_service.py` | Service 层核心逻辑（订单追踪、创建运单、报价、错误格式化） |
+| `test_domain_validation.py` | Domain 模型校验（必填字段、零值重量、国家码大写、页码校验等） |
+| `test_logistics_service.py` | Service 层全部 9 个方法 + 错误格式化（完整生命周期测试） |
 
 示例输出：
 
 ```
-tests/test_domain_validation.py::test_create_shipment_request_rejects_invalid_mode  PASSED
-tests/test_domain_validation.py::test_rate_quote_rejects_non_positive_weight        PASSED
-tests/test_logistics_service.py::test_track_existing_order                          PASSED
-tests/test_logistics_service.py::test_create_shipment                               PASSED
-tests/test_logistics_service.py::test_quote_rate                                    PASSED
-tests/test_logistics_service.py::test_format_validation_error_is_structured         PASSED
-tests/test_logistics_service.py::test_format_internal_error                         PASSED
-========================= 7 passed =========================
+tests/test_domain_validation.py::test_create_order_request_validates_required_fields    PASSED
+tests/test_domain_validation.py::test_create_order_request_rejects_zero_weight          PASSED
+tests/test_domain_validation.py::test_create_order_request_uppercases_country           PASSED
+tests/test_domain_validation.py::test_channel_price_request_rejects_empty_channelid     PASSED
+tests/test_domain_validation.py::test_price_query_request_rejects_zero_weight           PASSED
+tests/test_domain_validation.py::test_track_request_wraps_single_string                 PASSED
+tests/test_domain_validation.py::test_query_orders_request_rejects_zero_page            PASSED
+tests/test_logistics_service.py::test_query_channels                                    PASSED
+tests/test_logistics_service.py::test_query_destinations_all                            PASSED
+tests/test_logistics_service.py::test_query_destinations_filter                         PASSED
+tests/test_logistics_service.py::test_query_price                                       PASSED
+tests/test_logistics_service.py::test_estimate_channel_price                            PASSED
+tests/test_logistics_service.py::test_create_order                                      PASSED
+tests/test_logistics_service.py::test_query_orders                                      PASSED
+tests/test_logistics_service.py::test_track_shipment_by_waybill                         PASSED
+tests/test_logistics_service.py::test_track_shipment_by_systemnumber                    PASSED
+tests/test_logistics_service.py::test_track_shipment_not_found                          PASSED
+tests/test_logistics_service.py::test_get_order_fees                                    PASSED
+tests/test_logistics_service.py::test_get_order_fees_not_found                          PASSED
+tests/test_logistics_service.py::test_delete_order_predicted_status                     PASSED
+tests/test_logistics_service.py::test_delete_order_shipped_status                       PASSED
+tests/test_logistics_service.py::test_delete_order_not_found                            PASSED
+tests/test_logistics_service.py::test_format_validation_error                           PASSED
+tests/test_logistics_service.py::test_format_internal_error                             PASSED
+========================= 24 passed =========================
 ```
 
 ### 代码检查（可选）
@@ -170,28 +210,28 @@ mypy logistics_agent/
 
 ```
 logistics-adk-agent/
-├── .env                          # 环境变量配置
+├── .env                          # 环境变量配置（不提交到 Git）
 ├── pyproject.toml                # 项目元数据与依赖
 ├── README.md
 ├── logistics_agent/
 │   ├── __init__.py               # 入口，导入 agent 模块
-│   ├── agent.py                  # ADK Agent 定义（root_agent）
+│   ├── agent.py                  # ADK Agent 定义（root_agent），注册 9 个工具
 │   ├── config.py                 # 配置加载（dotenv + Settings）
 │   ├── main.py                   # CLI 快速测试脚本
 │   ├── models/
-│   │   └── domain.py             # Pydantic 数据模型
+│   │   └── domain.py             # Pydantic 数据模型（与物流系统 API 对齐）
 │   ├── providers/
-│   │   ├── base.py               # Provider 抽象基类
+│   │   ├── base.py               # Provider 抽象基类（9 个抽象方法）
 │   │   ├── factory.py            # Provider 工厂
 │   │   ├── mock_provider.py      # Mock 数据源
-│   │   └── http_provider.py      # HTTP 数据源（骨架）
+│   │   └── http_provider.py      # HTTP 数据源（httpx）
 │   ├── services/
 │   │   └── logistics_service.py  # 业务逻辑层
 │   ├── tools/
-│   │   └── logistics_tools.py    # ADK Tool 函数
+│   │   └── logistics_tools.py    # ADK Tool 函数（9 个）
 │   └── utils/
 │       └── presenters.py         # 展示工具
 └── tests/
     ├── test_domain_validation.py # Domain 模型测试
-    └── test_logistics_service.py # Service 层测试
+    └── test_logistics_service.py # Service 层测试（24 个用例）
 ```
