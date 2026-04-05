@@ -37,8 +37,9 @@ def resolve_service(tool_context: ToolContext | None = None) -> LogisticsService
     a per-user service is returned; otherwise the global singleton is used.
     """
     if tool_context is not None:
-        auth_code = (tool_context.state or {}).get("auth_code", "")
-        auth_token = (tool_context.state or {}).get("auth_token", "")
+        state: dict[str, str] = tool_context.state or {}  # type: ignore[assignment]
+        auth_code = state.get("auth_code", "")
+        auth_token = state.get("auth_token", "")
         if auth_code and auth_token:
             return get_service_for_user(auth_code, auth_token)
     return get_service()
