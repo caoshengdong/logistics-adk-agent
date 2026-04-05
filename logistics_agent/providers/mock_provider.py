@@ -13,6 +13,7 @@ from logistics_agent.models.domain import (
     DeleteOrderRequest,
     DestQueryParams,
     OrderFeesRequest,
+    OrderNotFoundError,
     PriceQueryRequest,
     QueryOrdersRequest,
     T6Channel,
@@ -32,9 +33,6 @@ from logistics_agent.models.domain import (
 )
 from logistics_agent.providers.base import LogisticsProvider
 
-
-class OrderNotFoundError(ValueError):
-    pass
 
 
 # ---------------------------------------------------------------------------
