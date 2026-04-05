@@ -16,6 +16,9 @@ RUN npm ci
 # Copy source and build
 COPY . .
 
+# Ensure public/ exists (git doesn't track empty directories)
+RUN mkdir -p public
+
 # Accept the backend URL as a build arg so Next.js can inline it into
 # the client bundle via the NEXT_PUBLIC_ prefix convention.
 ARG NEXT_PUBLIC_API_URL
