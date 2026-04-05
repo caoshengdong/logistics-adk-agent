@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -55,11 +56,25 @@ async def chat(
     )
     db_messages = list(result.scalars().all())
 
+    # Load persisted working-memory state for cold-start recovery (P1 fix)
+    saved_state: dict[str, str] | None = None
+    if db_session.state_json:
+        try:
+            saved_state = json.loads(db_session.state_json)
+        except (json.JSONDecodeError, TypeError):
+            saved_state = None
+
+    # ── 3. Persist the user message *before* streaming starts ────────
+    # This guarantees it is saved even if the SSE connection drops mid-stream.
+    db.add(ChatMessage(session_id=db_session.id, role="user", content=body.message))
+    await db.commit()
+
     async def event_generator():
         full_response: list[str] = []
+        latest_state_snapshot: str | None = None
 
         async for event_type, payload in run_agent_stream(
-            user, body.message, db_session.id, db_messages
+            user, body.message, db_session.id, db_messages, saved_state
         ):
             if event_type == "text":
                 full_response.append(payload)
@@ -71,13 +86,20 @@ async def chat(
                 yield f"data: {json.dumps({'type': 'tool_call', 'content': payload})}\n\n"
             elif event_type == "tool_result":
                 yield f"data: {json.dumps({'type': 'tool_result', 'content': payload})}\n\n"
+            elif event_type == "state_snapshot":
+                # Capture but don't send to frontend — this is for DB persistence
+                latest_state_snapshot = payload
 
-        # ── 4. Persist new messages to DB ─────────────────────────────
+        # ── 4. Persist assistant response & working-memory state ───────
         assistant_text = "".join(full_response)
 
-        db.add(ChatMessage(session_id=db_session.id, role="user", content=body.message))
         if assistant_text:
             db.add(ChatMessage(session_id=db_session.id, role="assistant", content=assistant_text))
+        # Persist the working-memory snapshot so it survives server restarts
+        if latest_state_snapshot is not None:
+            db_session.state_json = latest_state_snapshot
+        # Touch updated_at so the session list sorts by last activity
+        db_session.updated_at = datetime.now(timezone.utc)
         await db.commit()
 
         # Final event — carries the session id

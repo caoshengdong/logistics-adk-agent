@@ -10,6 +10,12 @@ from agent.services.logistics_service import LogisticsService
 from agent.tools._common import resolve_service
 
 
+def _save_state(tool_context: ToolContext | None, key: str, value: Any) -> None:
+    """Write a value into ADK session state (for cross-agent context sharing)."""
+    if tool_context is not None:
+        tool_context.state[key] = value
+
+
 def estimate_shipping_cost(
     channelid: str,
     countrycode: str,
@@ -30,7 +36,7 @@ def estimate_shipping_cost(
         goodstypecode: Goods type (WPX/DOC/PAK).
     """
     try:
-        return resolve_service(tool_context).estimate_channel_price({
+        result = resolve_service(tool_context).estimate_channel_price({
             "channelid": channelid,
             "countrycode": countrycode,
             "forecastweight": forecastweight,
@@ -38,6 +44,13 @@ def estimate_shipping_cost(
             "isbattery": isbattery,
             "goodstypecode": goodstypecode,
         })
+        # ── Compress into state ──
+        if result.get("status") == "success" and result.get("data"):
+            item = result["data"][0]
+            _save_state(tool_context, "last_estimate_channel", channelid)
+            _save_state(tool_context, "last_estimate_total",
+                        f"{item.get('amount', '?')} RMB")
+        return result
     except Exception as exc:
         return LogisticsService.format_error(exc)
 
@@ -62,7 +75,7 @@ def query_price(
         channelid: Optional channel code to filter results to a single channel.
     """
     try:
-        return resolve_service(tool_context).query_price({
+        result = resolve_service(tool_context).query_price({
             "dest": dest,
             "weight": weight,
             "piece": piece,
@@ -70,6 +83,26 @@ def query_price(
             "desttype": desttype,
             "channelid": channelid,
         })
+        # ── Compress into state: compact quote summary ──
+        if result.get("status") == "success" and result.get("data"):
+            channels = result["data"]
+            # Sort by price, store top-3 cheapest as compact string
+            sorted_ch = sorted(channels, key=lambda c: c.get("totalCost", 9999))
+            summary_parts = [
+                f"{c['channel']['channelid']}={c['totalCost']}RMB"
+                for c in sorted_ch[:3]
+                if "channel" in c
+            ]
+            _save_state(tool_context, "last_quote_summary",
+                        f"{dest}/{weight}kg top3: " + ", ".join(summary_parts))
+            if sorted_ch:
+                cheapest = sorted_ch[0]
+                _save_state(tool_context, "last_cheapest_channel",
+                            cheapest.get("channel", {}).get("channelid", ""))
+            # New comparison supersedes any previous single-channel estimate
+            _save_state(tool_context, "last_estimate_channel", "")
+            _save_state(tool_context, "last_estimate_total", "")
+        return result
     except Exception as exc:
         return LogisticsService.format_error(exc)
 
