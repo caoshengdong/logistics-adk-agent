@@ -3,31 +3,50 @@ from __future__ import annotations
 import json
 
 from logistics_agent.tools.logistics_tools import (
-    create_freight_shipment,
-    get_order_shipping_status,
-    get_shipment_status,
-    quote_freight_rate,
+    create_order,
+    delete_order,
+    estimate_shipping_cost,
+    get_order_fees,
+    query_channels,
+    query_destinations,
+    query_orders,
+    query_price,
+    track_shipment,
 )
 
 
 if __name__ == "__main__":
     demos = {
-        "track_order_12345": get_order_shipping_status("12345"),
-        "quote_shenzhen_to_los_angeles": quote_freight_rate(
-            origin="Shenzhen, CN",
-            destination="Los Angeles, US",
-            weight_kg=42.0,
-            mode="air",
+        "1_query_channels": query_channels(),
+        "2_query_destinations": query_destinations(dest="US"),
+        "3_query_price": query_price(dest="US", weight=10.0),
+        "4_estimate_shipping_cost": estimate_shipping_cost(
+            channelid="FEDEX-IP", countrycode="US", forecastweight=10.0,
         ),
-        "create_shipment": create_freight_shipment(
-            origin="Shenzhen, CN",
-            destination="Los Angeles, US",
-            weight_kg=42.0,
-            goods_description="Consumer electronics",
-            mode="air",
-            order_id="98765",
-            customer_reference="PO-2026-0001",
+        "5_create_order": create_order(
+            channelid="DHL-EXPRESS",
+            customernumber1="TEST-CLI-001",
+            countrycode="GB",
+            consigneename="Test User",
+            consigneeaddress1="123 Test St",
+            consigneecity="London",
+            consigneezipcode="SW1A 1AA",
+            consigneeprovince="England",
+            forecastweight=5.0,
+            goods_cnname="测试商品",
+            goods_weight_kg=2.5,
+            goods_quantity=2,
         ),
-        "track_seeded_shipment": get_shipment_status("SHP-10001"),
+        "6_query_orders": query_orders(
+            begcreatedate="2026-01-01 00:00:00",
+            endcreatedate="2026-12-31 23:59:59",
+        ),
+        "7_track_shipment": track_shipment(
+            number="T6W20260401002", number_type="waybillnumber",
+        ),
+        "8_get_order_fees": get_order_fees(waybillnumber="T6W20260401003"),
+        "9_delete_order": delete_order(
+            number="CUST-20260401-001", number_type="customernumber",
+        ),
     }
     print(json.dumps(demos, indent=2, ensure_ascii=False))

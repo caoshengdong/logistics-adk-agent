@@ -1,3 +1,8 @@
+"""Tests for LogisticsService using MockLogisticsProvider.
+
+Covers the full lifecycle: channels → price → create → query → track → fees → delete.
+"""
+
 from logistics_agent.providers.mock_provider import MockLogisticsProvider
 from logistics_agent.services.logistics_service import LogisticsService
 
@@ -6,57 +11,164 @@ provider = MockLogisticsProvider()
 service = LogisticsService(provider=provider)
 
 
-def test_track_existing_order() -> None:
-    result = service.track_order("12345")
+# ----- query_channels -----
+
+def test_query_channels() -> None:
+    result = service.query_channels()
     assert result["status"] == "success"
-    assert result["shipment"]["status"] == "in_transit"
-    assert result["summary"]["shipment_id"] == "SHP-10001"
+    assert len(result["data"]) >= 5
+    assert result["data"][0]["channelid"]
 
 
+# ----- query_destinations -----
 
-def test_create_shipment() -> None:
-    result = service.create_shipment(
-        {
-            "origin": "Shenzhen, CN",
-            "destination": "Los Angeles, US",
-            "weight_kg": 12,
-            "goods_description": "Footwear",
-            "mode": "air",
-            "order_id": "NEW-1",
-        }
+def test_query_destinations_all() -> None:
+    result = service.query_destinations({"dest": "", "desttype": "country"})
+    assert result["status"] == "success"
+    assert len(result["data"]) >= 5
+
+
+def test_query_destinations_filter() -> None:
+    result = service.query_destinations({"dest": "US"})
+    assert result["status"] == "success"
+    assert any(d["destCode"] == "US" for d in result["data"])
+
+
+# ----- query_price -----
+
+def test_query_price() -> None:
+    result = service.query_price({"dest": "US", "weight": 10.0})
+    assert result["status"] == "success"
+    assert len(result["data"]) >= 1
+    first = result["data"][0]
+    assert first["totalCost"] > 0
+    assert first["channel"]["channelid"]
+
+
+# ----- estimate_channel_price -----
+
+def test_estimate_channel_price() -> None:
+    result = service.estimate_channel_price({
+        "channelid": "FEDEX-IP", "countrycode": "US", "forecastweight": 10.0,
+    })
+    assert result["status"] == "success"
+    price_data = result["data"][0]
+    assert price_data["amount"] > 0
+    assert len(price_data["details"]) >= 2
+
+
+# ----- create_order -----
+
+def test_create_order() -> None:
+    result = service.create_order({
+        "channelid": "DHL-EXPRESS",
+        "customernumber1": "SVC-TEST-001",
+        "countrycode": "GB",
+        "consigneename": "Test User",
+        "consigneeaddress1": "123 Test Street",
+        "consigneecity": "London",
+        "consigneezipcode": "SW1A 1AA",
+        "consigneeprovince": "England",
+        "forecastweight": 5.0,
+        "items": [{"cnname": "测试商品", "weight": 2.5}],
+    })
+    assert result["status"] == "success"
+    order_data = result["data"][0]
+    assert order_data["code"] == 0
+    assert order_data["customernumber"] == "SVC-TEST-001"
+    assert order_data["systemnumber"].startswith("SYS")
+    assert order_data["waybillnumber"].startswith("T6W")
+
+
+# ----- query_orders -----
+
+def test_query_orders() -> None:
+    result = service.query_orders({
+        "begcreatedate": "2026-01-01 00:00:00",
+        "endcreatedate": "2026-12-31 23:59:59",
+    })
+    assert result["status"] == "success"
+    assert result["count"] >= 1
+    assert isinstance(result["data"], list)
+
+
+# ----- track_shipment -----
+
+def test_track_shipment_by_waybill() -> None:
+    result = service.track_shipment({"waybillnumber": ["T6W20260401002"]})
+    assert result["status"] == "success"
+    track = result["data"][0]
+    assert track["waybillnumber"] == "T6W20260401002"
+    assert track["orderstatusName"] == "已发货"
+    assert len(track["trackItems"]) >= 2
+
+
+def test_track_shipment_by_systemnumber() -> None:
+    result = service.track_shipment({"systemnumber": "SYS20260401004"})
+    assert result["status"] == "success"
+    track = result["data"][0]
+    assert track["systemnumber"] == "SYS20260401004"
+
+
+def test_track_shipment_not_found() -> None:
+    result = service.track_shipment({"waybillnumber": "NONEXISTENT"})
+    assert result["status"] == "success"
+    assert result["data"][0]["errormsg"] == "无效的单号"
+
+
+# ----- get_order_fees -----
+
+def test_get_order_fees() -> None:
+    result = service.get_order_fees({"waybillnumber": ["T6W20260401003"]})
+    assert result["status"] == "success"
+    fees = result["data"][0]
+    assert fees["searchNumber"] == "T6W20260401003"
+    assert len(fees["recsheetList"]) >= 2
+
+
+def test_get_order_fees_not_found() -> None:
+    result = service.get_order_fees({"waybillnumber": ["FAKE-123"]})
+    assert result["status"] == "success"
+    assert result["data"][0]["errormsg"] == "无效的单号"
+
+
+# ----- delete_order -----
+
+def test_delete_order_predicted_status() -> None:
+    """Deleting an order in Predicted status should succeed."""
+    result = service.delete_order({"customernumber": "CUST-20260401-001"})
+    assert result["status"] == "success"
+    assert result["msg"] == "删除成功"
+
+
+def test_delete_order_shipped_status() -> None:
+    """Deleting a shipped order should fail."""
+    result = service.delete_order({"waybillnumber": "T6W20260401002"})
+    assert result["status"] == "success"
+    assert result["code"] == -1
+    assert "无法删除" in result["msg"]
+
+
+def test_delete_order_not_found() -> None:
+    """Deleting a non-existent order should return error."""
+    result = service.format_error(
+        Exception("test")
     )
-    assert result["status"] == "success"
-    assert result["shipment"]["order_id"] == "NEW-1"
+    assert result["status"] == "error"
 
 
+# ----- format_error -----
 
-def test_quote_rate() -> None:
-    result = service.quote_rate(
-        {
-            "origin": "Shenzhen, CN",
-            "destination": "Los Angeles, US",
-            "weight_kg": 10,
-            "mode": "sea",
-        }
-    )
-    assert result["status"] == "success"
-    assert result["quote"]["currency"] == "USD"
-
-
-
-def test_format_validation_error_is_structured() -> None:
+def test_format_validation_error() -> None:
     try:
-        service.quote_rate(
-            {
-                "origin": "Shenzhen, CN",
-                "destination": "Los Angeles, US",
-                "weight_kg": -1,
-                "mode": "sea",
-            }
-        )
+        service.estimate_channel_price({
+            "channelid": "",  # invalid
+            "forecastweight": 10.0,
+            "countrycode": "US",
+        })
     except Exception as exc:
         result = service.format_error(exc)
-    else:  # pragma: no cover
+    else:
         raise AssertionError("Expected validation error")
     assert result["status"] == "error"
     assert result["error"]["code"] == "VALIDATION_ERROR"

@@ -1,127 +1,576 @@
+"""Mock provider producing realistic logistics-system-shaped data for local development."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Dict
+from typing import Any, Dict
 from uuid import uuid4
 
 from logistics_agent.models.domain import (
-    CreateShipmentRequest,
-    RateQuote,
-    RateQuoteRequest,
-    Shipment,
-    ShipmentEvent,
-    ShipmentMode,
-    ShipmentStatus,
-    eta_from_mode,
+    ChannelPriceRequest,
+    CreateOrderRequest,
+    DeleteOrderRequest,
+    DestQueryParams,
+    OrderFeesRequest,
+    PriceQueryRequest,
+    QueryOrdersRequest,
+    T6Channel,
+    T6ChannelPriceDetail,
+    T6ChannelPriceResult,
+    T6Destination,
+    T6FeeItem,
+    T6Order,
+    T6OrderFees,
+    T6PriceChannel,
+    T6PriceResult,
+    T6TrackEvent,
+    T6TrackResult,
+    TrackRequest,
+    now_str,
     now_utc,
 )
 from logistics_agent.providers.base import LogisticsProvider
 
 
-class ShipmentNotFoundError(ValueError):
+class OrderNotFoundError(ValueError):
     pass
 
 
+# ---------------------------------------------------------------------------
+# Seed data helpers
+# ---------------------------------------------------------------------------
+
+_MOCK_CHANNELS: list[T6Channel] = [
+    T6Channel(channelid="FEDEX-IP", channeltype="快递", channelname="联邦快递",
+              channelnamecn="联邦国际优先", channelnameen="FedEx International Priority"),
+    T6Channel(channelid="DHL-EXPRESS", channeltype="快递", channelname="DHL快递",
+              channelnamecn="DHL国际快递", channelnameen="DHL Express Worldwide"),
+    T6Channel(channelid="UPS-EXP", channeltype="快递", channelname="UPS快递",
+              channelnamecn="UPS全球速运", channelnameen="UPS Worldwide Express"),
+    T6Channel(channelid="YANWEN-STD", channeltype="专线", channelname="燕文标准",
+              channelnamecn="燕文标准专线", channelnameen="Yanwen Standard"),
+    T6Channel(channelid="MS-KQ", channeltype="专线", channelname="美森快船",
+              channelnamecn="美森快船专线", channelnameen="Mason Clippers"),
+    T6Channel(channelid="CN-EMS", channeltype="邮政", channelname="中国邮政EMS",
+              channelnamecn="中国邮政国际EMS", channelnameen="China Post EMS"),
+    T6Channel(channelid="SF-INTL", channeltype="快递", channelname="顺丰国际",
+              channelnamecn="顺丰国际快递", channelnameen="SF International Express"),
+]
+
+_MOCK_DESTINATIONS: list[T6Destination] = [
+    T6Destination(destName="美国", destCode="US"),
+    T6Destination(destName="英国", destCode="GB"),
+    T6Destination(destName="德国", destCode="DE"),
+    T6Destination(destName="法国", destCode="FR"),
+    T6Destination(destName="日本", destCode="JP"),
+    T6Destination(destName="澳大利亚", destCode="AU"),
+    T6Destination(destName="加拿大", destCode="CA"),
+    T6Destination(destName="俄罗斯", destCode="RU"),
+    T6Destination(destName="巴西", destCode="BR"),
+    T6Destination(destName="新加坡", destCode="SG"),
+]
+
+
+def _seed_orders() -> list[T6Order]:
+    """Generate a handful of seed orders for demo/testing."""
+    base_time = now_utc()
+    return [
+        T6Order(
+            pkid=10001,
+            systemnumber="SYS20260401001",
+            customernumber1="CUST-20260401-001",
+            waybillnumber="T6W20260401001",
+            tracknumber="1Z64104F6795715591",
+            channelid="FEDEX-IP",
+            channelname="联邦国际优先",
+            countrycode="US",
+            countryname="美国",
+            number=2,
+            status="Predicted",
+            statusname="已预报",
+            forecastweight=15.5,
+            inrweight=0.0,
+            consigneename="John Smith",
+            consigneecity="Los Angeles",
+            consigneeprovince="CA",
+            consigneezipcode="90001",
+            createdate=(base_time - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+            editdate=(base_time - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+            note="电子产品，注意防震",
+        ),
+        T6Order(
+            pkid=10002,
+            systemnumber="SYS20260401002",
+            customernumber1="CUST-20260401-002",
+            waybillnumber="T6W20260401002",
+            tracknumber="1Z5VT6220478322140",
+            channelid="DHL-EXPRESS",
+            channelname="DHL国际快递",
+            countrycode="GB",
+            countryname="英国",
+            number=1,
+            status="Shipped",
+            statusname="已发货",
+            forecastweight=3.2,
+            inrweight=3.3,
+            consigneename="Emma Watson",
+            consigneecity="London",
+            consigneeprovince="England",
+            consigneezipcode="SW1A 1AA",
+            createdate=(base_time - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S"),
+            editdate=(base_time - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S"),
+            note="服装样品",
+        ),
+        T6Order(
+            pkid=10003,
+            systemnumber="SYS20260401003",
+            customernumber1="CUST-20260401-003",
+            waybillnumber="T6W20260401003",
+            tracknumber="",
+            channelid="MS-KQ",
+            channelname="美森快船专线",
+            countrycode="US",
+            countryname="美国",
+            number=5,
+            status="Sign",
+            statusname="已签收",
+            forecastweight=120.0,
+            inrweight=118.5,
+            consigneename="Alice Johnson",
+            consigneecity="New York",
+            consigneeprovince="NY",
+            consigneezipcode="10001",
+            createdate=(base_time - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S"),
+            editdate=(base_time - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+            note="家居用品批量发货",
+        ),
+        T6Order(
+            pkid=10004,
+            systemnumber="SYS20260401004",
+            customernumber1="CUST-20260401-004",
+            waybillnumber="T6W20260401004",
+            tracknumber="JD0042726839",
+            channelid="SF-INTL",
+            channelname="顺丰国际快递",
+            countrycode="JP",
+            countryname="日本",
+            number=1,
+            status="InTransit",
+            statusname="运输中",
+            forecastweight=2.1,
+            inrweight=2.0,
+            consigneename="田中太郎",
+            consigneecity="東京",
+            consigneeprovince="東京都",
+            consigneezipcode="100-0001",
+            createdate=(base_time - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+            editdate=(base_time - timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S"),
+            note="化妆品小样",
+        ),
+    ]
+
+
+def _seed_tracks() -> dict[str, T6TrackResult]:
+    """Generate track results keyed by waybillnumber / systemnumber / customernumber."""
+    base_time = now_utc()
+    t1 = T6TrackResult(
+        searchNumber="T6W20260401001",
+        systemnumber="SYS20260401001",
+        waybillnumber="T6W20260401001",
+        tracknumber="1Z64104F6795715591",
+        countrycode="US",
+        orderstatus="Predicted",
+        orderstatusName="已预报",
+        trackItems=[
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="深圳, CN",
+                info="运单已创建，等待揽收",
+                responsecode="OT001",
+            ),
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=2, hours=18)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=2, hours=18)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="深圳, CN",
+                info="包裹已揽收",
+                responsecode="OT001",
+            ),
+        ],
+    )
+    t2 = T6TrackResult(
+        searchNumber="T6W20260401002",
+        systemnumber="SYS20260401002",
+        waybillnumber="T6W20260401002",
+        tracknumber="1Z5VT6220478322140",
+        countrycode="GB",
+        orderstatus="Shipped",
+        orderstatusName="已发货",
+        trackItems=[
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="深圳, CN",
+                info="运单已创建",
+                responsecode="OT001",
+            ),
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=4)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=4)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="深圳, CN",
+                info="已离开深圳分拨中心",
+                responsecode="OT001",
+            ),
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="香港, CN",
+                info="航班已起飞",
+                responsecode="OT001",
+            ),
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="London, GB",
+                info="到达目的国，等待清关",
+                responsecode="OT001",
+            ),
+        ],
+    )
+    t3 = T6TrackResult(
+        searchNumber="T6W20260401003",
+        systemnumber="SYS20260401003",
+        waybillnumber="T6W20260401003",
+        countrycode="US",
+        orderstatus="Sign",
+        orderstatusName="已签收",
+        trackItems=[
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="深圳, CN",
+                info="运单已创建",
+                responsecode="OT001",
+            ),
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=25)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=25)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="盐田港, CN",
+                info="已装船出港",
+                responsecode="OT001",
+            ),
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="Los Angeles, US",
+                info="到达港口，开始清关",
+                responsecode="OT001",
+            ),
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="New York, US",
+                info="已递送，签收人: Alice Johnson",
+                responsecode="OT001",
+            ),
+        ],
+    )
+    t4 = T6TrackResult(
+        searchNumber="T6W20260401004",
+        systemnumber="SYS20260401004",
+        waybillnumber="T6W20260401004",
+        tracknumber="JD0042726839",
+        countrycode="JP",
+        orderstatus="InTransit",
+        orderstatusName="运输中",
+        trackItems=[
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="深圳, CN",
+                info="运单已创建，已揽收",
+                responsecode="OT001",
+            ),
+            T6TrackEvent(
+                trackdate=(base_time - timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S"),
+                trackdate_utc8=(base_time - timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S"),
+                location="上海浦东机场, CN",
+                info="航班已起飞，前往东京",
+                responsecode="OT001",
+            ),
+        ],
+    )
+    # Build lookup maps: waybillnumber -> track, systemnumber -> track, customernumber -> track
+    results: dict[str, T6TrackResult] = {}
+    for t in [t1, t2, t3, t4]:
+        results[t.waybillnumber] = t
+        results[t.systemnumber] = t
+    # Also index by customernumber
+    cust_map = {
+        "CUST-20260401-001": t1,
+        "CUST-20260401-002": t2,
+        "CUST-20260401-003": t3,
+        "CUST-20260401-004": t4,
+    }
+    results.update(cust_map)
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Mock Provider
+# ---------------------------------------------------------------------------
+
 @dataclass
 class MockLogisticsProvider(LogisticsProvider):
-    shipments_by_id: Dict[str, Shipment] = field(default_factory=dict)
-    order_to_shipment: Dict[str, str] = field(default_factory=dict)
+    orders: Dict[str, T6Order] = field(default_factory=dict)
+    tracks: Dict[str, T6TrackResult] = field(default_factory=dict)
+    _next_pkid: int = field(default=20000)
 
     def __post_init__(self) -> None:
-        if self.shipments_by_id:
-            return
-        self._seed_data()
+        if not self.orders:
+            self._seed_data()
 
     def _seed_data(self) -> None:
-        shipment = Shipment(
-            shipment_id="SHP-10001",
-            order_id="12345",
-            origin="Shenzhen, CN",
-            destination="Los Angeles, US",
-            mode=ShipmentMode.AIR,
-            status=ShipmentStatus.IN_TRANSIT,
-            eta=now_utc() + timedelta(days=2),
-            customer_reference="PO-7788",
-            events=[
-                ShipmentEvent(
-                    timestamp=now_utc() - timedelta(days=3),
-                    location="Shenzhen, CN",
-                    code="BOOKED",
-                    description="Shipment booked with carrier.",
-                ),
-                ShipmentEvent(
-                    timestamp=now_utc() - timedelta(days=2, hours=5),
-                    location="Shenzhen, CN",
-                    code="PICKED_UP",
-                    description="Cargo picked up from origin warehouse.",
-                ),
-                ShipmentEvent(
-                    timestamp=now_utc() - timedelta(days=1, hours=7),
-                    location="Hong Kong, CN",
-                    code="DEPARTED",
-                    description="Flight departed origin hub.",
-                ),
-            ],
+        for order in _seed_orders():
+            self.orders[order.waybillnumber] = order
+            self.orders[order.systemnumber] = order
+            self.orders[order.customernumber1] = order
+        self.tracks = _seed_tracks()
+
+    # --- create_order ---
+    def create_order(self, request: CreateOrderRequest) -> dict[str, Any]:
+        self._next_pkid += 1
+        sys_number = f"SYS{now_utc().strftime('%Y%m%d')}{self._next_pkid:03d}"
+        waybill = f"T6W{now_utc().strftime('%Y%m%d')}{self._next_pkid:03d}"
+
+        order = T6Order(
+            pkid=self._next_pkid,
+            systemnumber=sys_number,
+            customernumber1=request.customernumber1,
+            customernumber2=request.customernumber2,
+            waybillnumber=waybill,
+            channelid=request.channelid,
+            channelname=request.channelid,
+            countrycode=request.countrycode,
+            number=request.number,
+            status="Predicted",
+            statusname="已预报",
+            forecastweight=request.forecastweight,
+            consigneename=request.consigneename,
+            consigneecity=request.consigneecity,
+            consigneeprovince=request.consigneeprovince,
+            consigneezipcode=request.consigneezipcode,
+            createdate=now_str(),
+            editdate=now_str(),
+            note=request.note,
         )
-        self.shipments_by_id[shipment.shipment_id] = shipment
-        self.order_to_shipment[shipment.order_id or ""] = shipment.shipment_id
+        self.orders[waybill] = order
+        self.orders[sys_number] = order
+        self.orders[request.customernumber1] = order
 
-    def get_shipment_by_order_id(self, order_id: str) -> Shipment:
-        shipment_id = self.order_to_shipment.get(order_id)
-        if not shipment_id:
-            raise ShipmentNotFoundError(f"No shipment found for order_id={order_id}")
-        return self.shipments_by_id[shipment_id]
-
-    def get_shipment_by_shipment_id(self, shipment_id: str) -> Shipment:
-        shipment = self.shipments_by_id.get(shipment_id)
-        if not shipment:
-            raise ShipmentNotFoundError(f"No shipment found for shipment_id={shipment_id}")
-        return shipment
-
-    def create_shipment(self, request: CreateShipmentRequest) -> Shipment:
-        shipment_id = f"SHP-{str(uuid4())[:8].upper()}"
-        shipment = Shipment(
-            shipment_id=shipment_id,
-            order_id=request.order_id,
-            origin=request.origin,
-            destination=request.destination,
-            mode=request.mode,
-            status=ShipmentStatus.CREATED,
-            eta=eta_from_mode(request.mode),
-            customer_reference=request.customer_reference,
-            events=[
-                ShipmentEvent(
-                    timestamp=now_utc(),
-                    location=request.origin,
-                    code="CREATED",
-                    description=f"Shipment created for {request.goods_description}.",
-                )
+        return {
+            "code": 0,
+            "msg": "调用成功",
+            "data": [
+                {
+                    "code": 0,
+                    "msg": "下单成功",
+                    "customernumber": request.customernumber1,
+                    "systemnumber": sys_number,
+                    "waybillnumber": waybill,
+                }
             ],
-        )
-        self.shipments_by_id[shipment_id] = shipment
-        if request.order_id:
-            self.order_to_shipment[request.order_id] = shipment_id
-        return shipment
-
-    def quote_rate(self, request: RateQuoteRequest) -> RateQuote:
-        mode_base = {
-            ShipmentMode.EXPRESS: 11.5,
-            ShipmentMode.AIR: 8.0,
-            ShipmentMode.TRUCK: 3.5,
-            ShipmentMode.RAIL: 2.8,
-            ShipmentMode.SEA: 1.2,
         }
-        route_factor = 1.6 if request.origin != request.destination else 1.0
-        amount = round(mode_base[request.mode] * request.weight_kg * route_factor, 2)
-        transit_days = {
-            ShipmentMode.EXPRESS: 3,
-            ShipmentMode.AIR: 5,
-            ShipmentMode.TRUCK: 7,
-            ShipmentMode.RAIL: 12,
-            ShipmentMode.SEA: 28,
-        }[request.mode]
-        notes = ["Mock quote based on configured weight and transport mode."]
-        if request.weight_kg > 100:
-            notes.append("Heavy cargo surcharge likely applies in the real API.")
-        return RateQuote(amount=amount, estimated_transit_days=transit_days, surcharge_notes=notes)
+
+    # --- query_orders ---
+    def query_orders(self, request: QueryOrdersRequest) -> dict[str, Any]:
+        # Deduplicate orders (same order indexed by multiple keys)
+        unique: dict[int, T6Order] = {}
+        for o in self.orders.values():
+            if o.pkid not in unique:
+                # Simple date filter
+                if request.begcreatedate <= o.createdate <= request.endcreatedate:
+                    unique[o.pkid] = o
+
+        all_orders = sorted(unique.values(), key=lambda x: x.createdate, reverse=True)
+        total = len(all_orders)
+        start = (request.page - 1) * request.limit
+        page_orders = all_orders[start: start + request.limit]
+
+        return {
+            "code": 0,
+            "count": total,
+            "data": [o.model_dump(mode="json") for o in page_orders],
+        }
+
+    # --- track_shipment ---
+    def track_shipment(self, request: TrackRequest) -> dict[str, Any]:
+        numbers: list[str] = []
+        if request.waybillnumber:
+            numbers = request.waybillnumber
+        elif request.systemnumber:
+            numbers = request.systemnumber
+        elif request.customernumber:
+            numbers = request.customernumber
+
+        results: list[dict[str, Any]] = []
+        for num in numbers:
+            track = self.tracks.get(num)
+            if track:
+                results.append(track.model_dump(mode="json"))
+            else:
+                results.append({"searchNumber": num, "errormsg": "无效的单号"})
+
+        return {"code": 0, "msg": "success", "data": results}
+
+    # --- estimate_channel_price ---
+    def estimate_channel_price(self, request: ChannelPriceRequest) -> dict[str, Any]:
+        # Simple mock pricing: base rate by channel type
+        channel_rates = {
+            "FEDEX-IP": 45.0,
+            "DHL-EXPRESS": 42.0,
+            "UPS-EXP": 40.0,
+            "SF-INTL": 35.0,
+            "YANWEN-STD": 18.0,
+            "MS-KQ": 12.0,
+            "CN-EMS": 25.0,
+        }
+        base_rate = channel_rates.get(request.channelid, 30.0)
+        freight = round(base_rate * request.forecastweight, 2)
+        fuel = round(freight * 0.125, 2)
+        total = round(freight + fuel, 2)
+
+        result = T6ChannelPriceResult(
+            code=0,
+            msg="成功",
+            amount=total,
+            details=[
+                T6ChannelPriceDetail(amount=freight, code="RMB", name="人民币", type="运费"),
+                T6ChannelPriceDetail(amount=fuel, code="RMB", name="人民币", type="燃油费"),
+            ],
+        )
+        return {"code": 0, "msg": "调用成功", "data": [result.model_dump(mode="json")]}
+
+    # --- query_price ---
+    def query_price(self, request: PriceQueryRequest) -> dict[str, Any]:
+        results: list[dict[str, Any]] = []
+        for ch in _MOCK_CHANNELS:
+            channel_rates = {
+                "FEDEX-IP": 45.0, "DHL-EXPRESS": 42.0, "UPS-EXP": 40.0,
+                "SF-INTL": 35.0, "YANWEN-STD": 18.0, "MS-KQ": 12.0, "CN-EMS": 25.0,
+            }
+            aging_map = {
+                "FEDEX-IP": "3-5天", "DHL-EXPRESS": "3-5天", "UPS-EXP": "3-5天",
+                "SF-INTL": "4-6天", "YANWEN-STD": "7-15天", "MS-KQ": "20-30天", "CN-EMS": "7-12天",
+            }
+            if request.channelid and ch.channelid != request.channelid:
+                continue
+
+            base_rate = channel_rates.get(ch.channelid, 30.0)
+            tran_cost = round(base_rate * request.weight, 2)
+            fuel_rate = 0.125
+            fuel_cost = round(tran_cost * fuel_rate, 2)
+            total = round(tran_cost + fuel_cost, 2)
+
+            price_result = T6PriceResult(
+                channel=T6PriceChannel(
+                    channelid=ch.channelid,
+                    channelname=ch.channelname,
+                    channelnamecn=ch.channelnamecn,
+                    channelnameen=ch.channelnameen,
+                    aging=aging_map.get(ch.channelid, ""),
+                ),
+                totalCost=total,
+                totalCostCcy="RMB",
+                weight=request.weight,
+                tranCost=tran_cost,
+                fuelCost=fuel_cost,
+                fuelCostRate=fuel_rate,
+            )
+            results.append(price_result.model_dump(mode="json"))
+
+        return {"code": 0, "msg": "success", "data": results}
+
+    # --- query_channels ---
+    def query_channels(self) -> dict[str, Any]:
+        return {
+            "code": 0,
+            "msg": "调用成功",
+            "data": [ch.model_dump(mode="json") for ch in _MOCK_CHANNELS],
+        }
+
+    # --- query_destinations ---
+    def query_destinations(self, params: DestQueryParams) -> dict[str, Any]:
+        keyword = params.dest.upper()
+        matches = [
+            d for d in _MOCK_DESTINATIONS
+            if not keyword or keyword in d.destCode.upper() or keyword in d.destName
+        ]
+        return {
+            "code": 0,
+            "msg": "success",
+            "data": [d.model_dump(mode="json") for d in matches],
+        }
+
+    # --- get_order_fees ---
+    def get_order_fees(self, request: OrderFeesRequest) -> dict[str, Any]:
+        results: list[dict[str, Any]] = []
+        for num in (request.waybillnumber or []):
+            order = self.orders.get(num)
+            if not order:
+                results.append({"searchNumber": num, "errormsg": "无效的单号"})
+                continue
+
+            # Generate mock fees
+            weight = order.inrweight or order.forecastweight
+            freight = round(weight * 35.0, 2)
+            fuel = round(freight * 0.125, 2)
+            reg_fee = 5.0
+
+            fees = T6OrderFees(
+                searchNumber=num,
+                inrweight=order.inrweight,
+                inmweight=0.0,
+                clientweight=weight,
+                number=order.number,
+                recsheetList=[
+                    T6FeeItem(sheetid=f"RS-{order.pkid}-01", costtype="FREIGHT",
+                              costtypeName="运费", amount=freight, currency="RMB", currencyName="人民币"),
+                    T6FeeItem(sheetid=f"RS-{order.pkid}-02", costtype="FUEL",
+                              costtypeName="燃油费", amount=fuel, currency="RMB", currencyName="人民币"),
+                    T6FeeItem(sheetid=f"RS-{order.pkid}-03", costtype="REGISTER",
+                              costtypeName="挂号费", amount=reg_fee, currency="RMB", currencyName="人民币"),
+                ],
+            )
+            results.append(fees.model_dump(mode="json"))
+
+        return {"code": 0, "msg": "success", "data": results}
+
+    # --- delete_order ---
+    def delete_order(self, request: DeleteOrderRequest) -> dict[str, Any]:
+        lookup_key = request.customernumber or request.waybillnumber or request.systemnumber
+        if not lookup_key:
+            return {"code": -1, "msg": "未提供单号"}
+
+        order = self.orders.get(lookup_key)
+        if not order:
+            raise OrderNotFoundError(f"未找到单号: {lookup_key}")
+
+        # Only allow deleting draft / predicted orders
+        if order.status not in ("Draft", "Predicted"):
+            return {"code": -1, "msg": f"运单状态为「{order.statusname}」，无法删除，仅草稿和已预报状态可删除"}
+
+        # Remove all index keys for this order
+        keys_to_remove = [
+            k for k, v in self.orders.items() if v.pkid == order.pkid
+        ]
+        for k in keys_to_remove:
+            del self.orders[k]
+        # Also remove tracks
+        for k in list(self.tracks.keys()):
+            t = self.tracks[k]
+            if t.systemnumber == order.systemnumber:
+                del self.tracks[k]
+
+        return {"code": 0, "msg": "删除成功"}

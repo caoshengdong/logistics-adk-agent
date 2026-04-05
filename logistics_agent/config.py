@@ -14,11 +14,10 @@ dotenv.load_dotenv(_PROJECT_ROOT / ".env")
 class Settings:
     model: str = os.getenv("LOGISTICS_AGENT_MODEL", "gemini-3-flash-preview")
     provider_backend: str = os.getenv("LOGISTICS_PROVIDER_BACKEND", "mock")
-    api_base_url: str | None = os.getenv("LOGISTICS_API_BASE_URL")
-    api_key: str | None = os.getenv("LOGISTICS_API_KEY")
+    api_base_url: str = os.getenv("LOGISTICS_API_BASE_URL", "http://47.115.60.18")
+    auth_code: str | None = os.getenv("LOGISTICS_AUTH_CODE")
+    auth_token: str | None = os.getenv("LOGISTICS_AUTH_TOKEN")
     http_timeout_seconds: float = float(os.getenv("LOGISTICS_HTTP_TIMEOUT_SECONDS", "10"))
-    default_origin_country: str = "CN"
-    default_destination_country: str = "US"
 
 
 settings = Settings()

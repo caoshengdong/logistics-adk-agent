@@ -1618,6 +1618,7 @@ version = "0.2.0"
 source = { virtual = "." }
 dependencies = [
     { name = "google-adk" },
+    { name = "httpx" },
     { name = "pydantic" },
     { name = "pytest" },
     { name = "python-dotenv" },
@@ -1633,6 +1634,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "google-adk", specifier = ">=1.18.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "pydantic", specifier = ">=2.8.0" },
     { name = "pytest", specifier = ">=9.0.2" },
