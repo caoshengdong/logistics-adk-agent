@@ -31,9 +31,10 @@ body {
   font-size: 0.8em;
 }
 .prose pre code { @apply bg-transparent text-gray-100 p-0; }
-.prose table { @apply text-xs border-collapse; }
-.prose table th { @apply bg-gray-50 font-semibold text-gray-600 px-3 py-2 border border-gray-200; }
-.prose table td { @apply px-3 py-2 border border-gray-100; }
+.prose table { @apply text-xs border-collapse w-full my-3 rounded-lg overflow-hidden; }
+.prose table th { @apply bg-gray-50 font-semibold text-gray-600 px-3 py-2 border border-gray-200 text-left whitespace-nowrap; }
+.prose table td { @apply px-3 py-2 border border-gray-100 whitespace-nowrap; }
+.prose table tr:hover td { @apply bg-gray-50/50; }
 .prose p { @apply mb-2 last:mb-0; }
 .prose ul, .prose ol { @apply mb-2; }
 .prose blockquote { @apply border-l-4 border-blue-400 bg-blue-50/50 px-4 py-2 rounded-r-lg text-gray-600 italic; }

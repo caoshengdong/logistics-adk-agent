@@ -1,5 +1,6 @@
 "use client";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
   id?: string;
@@ -179,8 +180,16 @@ export default function ChatMessageList({ messages, streaming, agentSteps, onSug
                   <span className="whitespace-pre-wrap">{msg.content}</span>
                 ) : (
                   <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
                     className="prose prose-sm max-w-none prose-headings:mb-2 prose-headings:mt-3
                                prose-p:mb-2 prose-li:my-0.5 prose-img:rounded-xl"
+                    components={{
+                      table: ({ children, ...props }) => (
+                        <div className="overflow-x-auto -mx-1">
+                          <table {...props}>{children}</table>
+                        </div>
+                      ),
+                    }}
                   >
                     {msg.content}
                   </ReactMarkdown>
@@ -198,7 +207,7 @@ export default function ChatMessageList({ messages, streaming, agentSteps, onSug
           <div className="msg-appear flex gap-3 items-start">
             <BotIcon />
             <div className="max-w-[80%] px-4 py-3 rounded-2xl rounded-tl-sm bg-white border border-gray-100/80 shadow-sm text-sm leading-relaxed">
-              <ReactMarkdown className="prose prose-sm max-w-none">{streaming}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-sm max-w-none">{streaming}</ReactMarkdown>
               <span className="streaming-cursor" />
             </div>
           </div>
