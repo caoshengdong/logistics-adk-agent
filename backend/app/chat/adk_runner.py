@@ -11,12 +11,12 @@ Key responsibilities:
 
 from __future__ import annotations
 
-import asyncio
 import json as _json
 import logging
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 
+from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.events.event import Event
 from google.adk.events.event_actions import EventActions
 from google.adk.runners import Runner
@@ -190,7 +190,7 @@ async def run_agent_stream(
     Yields
     ------
     tuple[str, str]
-        ``("text", chunk)``              — agent text output
+        ``("text", chunk)``              — agent text output (streamed token-by-token)
         ``("text_reset", "")``           — new speaker; clear accumulated text
         ``("tool_call", json_string)``   — agent invoked a tool
         ``("tool_result", json_string)`` — tool returned a result
@@ -199,6 +199,10 @@ async def run_agent_stream(
     session = await get_or_create_session(user, session_id, db_messages)
 
     content = types.Content(role="user", parts=[types.Part(text=message)])
+
+    # Enable true LLM-level streaming so the model yields tokens as they are
+    # generated instead of waiting for the full response.
+    run_config = RunConfig(streaming_mode=StreamingMode.SSE)
 
     # Track which agent last produced text.  When the speaking agent changes,
     # we send a "text_reset" event so the frontend clears previously streamed
@@ -210,28 +214,31 @@ async def run_agent_stream(
         user_id=user.id,
         session_id=session.id,
         new_message=content,
+        run_config=run_config,
     ):
         event_author = getattr(event, "author", None) or ""
+        is_partial = getattr(event, "partial", None) is True
 
         if event.content and event.content.parts:
             for part in event.content.parts:
+                # Stream text from both partial (incremental) and final events.
                 if part.text:
                     if last_text_author is not None and event_author != last_text_author:
                         yield ("text_reset", "")
                     last_text_author = event_author
+                    yield ("text", part.text)
 
-                    for chunk in _iter_word_chunks(part.text):
-                        yield ("text", chunk)
-                        await asyncio.sleep(0)
-
-                if part.function_call:
+                # Tool calls / results only appear in non-partial events;
+                # partial function_call parts are incomplete and must be
+                # skipped (ADK does not execute them either).
+                if not is_partial and part.function_call:
                     fc = part.function_call
                     yield ("tool_call", _json.dumps({
                         "name": fc.name,
                         "args": dict(fc.args) if fc.args else {},
                     }))
 
-                if part.function_response:
+                if not is_partial and part.function_response:
                     fr = part.function_response
                     resp_str = _json.dumps(
                         fr.response if fr.response else {},
@@ -248,21 +255,4 @@ async def run_agent_stream(
     yield ("session_id", session.id)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _iter_word_chunks(text: str, max_chars: int = 6):
-    """Break *text* into small chunks for progressive streaming."""
-    import re
-
-    tokens = re.findall(r"\S+|\s+", text)
-    buf = ""
-    for tok in tokens:
-        buf += tok
-        if len(buf) >= max_chars:
-            yield buf
-            buf = ""
-    if buf:
-        yield buf
 
