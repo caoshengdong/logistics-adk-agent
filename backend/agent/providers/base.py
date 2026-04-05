@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from logistics_agent.models.domain import (
+from agent.models.domain import (
     ChannelPriceRequest,
     CreateOrderRequest,
     DeleteOrderRequest,

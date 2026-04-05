@@ -16,9 +16,9 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from backend.app.config import backend_settings
-from backend.app.models import User
-from logistics_agent.agent import root_agent
+from app.config import backend_settings
+from app.models import User
+from agent.agent import root_agent
 
 logger = logging.getLogger(__name__)
 

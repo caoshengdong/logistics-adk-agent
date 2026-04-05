@@ -1,7 +1,7 @@
 """FastAPI application entry point.
 
 Run with:
-    uvicorn backend.app.main:app --reload --port 8000
+    uvicorn app.main:app --reload --port 8000
 """
 
 from __future__ import annotations
@@ -12,11 +12,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.auth.router import router as auth_router
-from backend.app.chat.router import router as chat_router
-from backend.app.config import backend_settings
-from backend.app.database import engine
-from backend.app.models import Base
+from app.auth.router import router as auth_router
+from app.chat.router import router as chat_router
+from app.config import backend_settings
+from app.database import engine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -24,10 +23,8 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup — create tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables ensured.")
+    # Startup — tables are managed by Alembic migrations
+    logger.info("Application startup complete.")
     yield
     # Shutdown
     await engine.dispose()

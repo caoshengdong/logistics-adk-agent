@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import json
 
-from logistics_agent.tools.order_tools import (
+from agent.tools.order_tools import (
     create_order,
     delete_order,
     query_orders,
 )
-from logistics_agent.tools.pricing_tools import (
+from agent.tools.pricing_tools import (
     estimate_shipping_cost,
     query_channels,
     query_destinations,
     query_price,
 )
-from logistics_agent.tools.tracking_tools import (
+from agent.tools.tracking_tools import (
     get_order_fees,
     track_shipment,
 )

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from logistics_agent.config import settings
-from logistics_agent.providers.base import LogisticsProvider
-from logistics_agent.providers.http_provider import HttpLogisticsProvider
-from logistics_agent.providers.mock_provider import MockLogisticsProvider
+from agent.config import settings
+from agent.providers.base import LogisticsProvider
+from agent.providers.http_provider import HttpLogisticsProvider
+from agent.providers.mock_provider import MockLogisticsProvider
 
 
 @lru_cache(maxsize=1)

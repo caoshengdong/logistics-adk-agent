@@ -12,19 +12,19 @@ from __future__ import annotations
 
 from google.adk.agents.llm_agent import Agent
 
-from logistics_agent.config import settings
-from logistics_agent.tools.order_tools import (
+from agent.config import settings
+from agent.tools.order_tools import (
     create_order,
     delete_order,
     query_orders,
 )
-from logistics_agent.tools.pricing_tools import (
+from agent.tools.pricing_tools import (
     estimate_shipping_cost,
     query_channels,
     query_destinations,
     query_price,
 )
-from logistics_agent.tools.tracking_tools import (
+from agent.tools.tracking_tools import (
     get_order_fees,
     track_shipment,
 )
@@ -53,7 +53,12 @@ order_agent = Agent(
         "If any field is missing, only ask for the "
         "missing ones.\n"
         "- **query_orders**: Query the order list by date "
-        "range with pagination.\n"
+        "range with pagination. **When the user asks for "
+        "'recent orders' or 'my orders' without specifying "
+        "dates, call this tool directly without providing "
+        "begcreatedate/endcreatedate — it will default to "
+        "the last 14 days. Do NOT ask the user for dates "
+        "unless they explicitly want a custom range.**\n"
         "- **delete_order**: Delete an order (only draft "
         "and forecast statuses are deletable).\n\n"
         "If the user needs channel lookup or pricing, "

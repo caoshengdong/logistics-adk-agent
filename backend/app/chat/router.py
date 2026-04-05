@@ -10,11 +10,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.chat.adk_runner import run_agent_stream
-from backend.app.database import get_db
-from backend.app.models import ChatMessage, ChatSession, User
-from backend.app.schemas import (
+from app.auth.dependencies import get_current_user
+from app.chat.adk_runner import run_agent_stream
+from app.database import get_db
+from app.models import ChatMessage, ChatSession, User
+from app.schemas import (
     ChatMessageResponse,
     ChatRequest,
     ChatSessionResponse,

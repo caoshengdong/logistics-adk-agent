@@ -8,9 +8,9 @@ from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.auth.security import decode_access_token
-from backend.app.database import get_db
-from backend.app.models import User
+from app.auth.security import decode_access_token
+from app.database import get_db
+from app.models import User
 
 _bearer = HTTPBearer()
 

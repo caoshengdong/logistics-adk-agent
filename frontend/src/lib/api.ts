@@ -1,7 +1,12 @@
 import { getToken, removeToken } from "./auth";
 import type { ChatSession, ChatMessage, SSEEvent, TokenResponse, User } from "@/types";
 
-const API_BASE = "/api";
+/**
+ * API base URL:
+ * - Production: set NEXT_PUBLIC_API_URL to the backend origin, e.g. "https://api.example.com/api"
+ * - Development: leave unset → falls back to "/api" (proxied by next.config.js rewrite)
+ */
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();

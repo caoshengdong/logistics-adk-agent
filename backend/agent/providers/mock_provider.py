@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
-from logistics_agent.models.domain import (
+from agent.models.domain import (
     ChannelPriceRequest,
     CreateOrderRequest,
     DeleteOrderRequest,
@@ -30,7 +30,7 @@ from logistics_agent.models.domain import (
     now_str,
     now_utc,
 )
-from logistics_agent.providers.base import LogisticsProvider
+from agent.providers.base import LogisticsProvider
 
 # ---------------------------------------------------------------------------
 # Seed data helpers

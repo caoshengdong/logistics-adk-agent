@@ -6,8 +6,8 @@ from typing import Any
 
 from google.adk.tools import ToolContext
 
-from logistics_agent.services.logistics_service import LogisticsService
-from logistics_agent.tools._common import resolve_service
+from agent.services.logistics_service import LogisticsService
+from agent.tools._common import resolve_service
 
 
 def estimate_shipping_cost(

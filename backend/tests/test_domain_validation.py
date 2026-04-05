@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from logistics_agent.models.domain import (
+from agent.models.domain import (
     ChannelPriceRequest,
     CreateOrderRequest,
     PriceQueryRequest,

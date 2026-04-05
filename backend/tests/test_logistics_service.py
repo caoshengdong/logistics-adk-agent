@@ -5,8 +5,8 @@ Covers the full lifecycle: channels → price → create → query → track →
 
 import pytest
 
-from logistics_agent.providers.mock_provider import MockLogisticsProvider
-from logistics_agent.services.logistics_service import LogisticsService
+from agent.providers.mock_provider import MockLogisticsProvider
+from agent.services.logistics_service import LogisticsService
 
 
 @pytest.fixture()
@@ -155,7 +155,7 @@ def test_delete_order_shipped_status(service: LogisticsService) -> None:
 
 def test_delete_order_not_found(service: LogisticsService) -> None:
     """Deleting a non-existent order should raise and format error."""
-    from logistics_agent.models.domain import OrderNotFoundError
+    from agent.models.domain import OrderNotFoundError
     result = service.format_error(
         OrderNotFoundError("未找到单号: NONEXISTENT")
     )
@@ -181,7 +181,7 @@ def test_format_validation_error(service: LogisticsService) -> None:
 
 
 def test_format_api_error(service: LogisticsService) -> None:
-    from logistics_agent.models.domain import LogisticsApiError
+    from agent.models.domain import LogisticsApiError
     result = service.format_error(LogisticsApiError(code=500, msg="server error"))
     assert result["status"] == "error"
     assert result["error"]["code"] == "API_ERROR"

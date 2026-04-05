@@ -6,8 +6,10 @@ from pathlib import Path
 
 import dotenv
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = _BACKEND_ROOT.parent
 dotenv.load_dotenv(_PROJECT_ROOT / ".env")
+dotenv.load_dotenv(_BACKEND_ROOT / ".env")
 
 
 @dataclass(frozen=True)

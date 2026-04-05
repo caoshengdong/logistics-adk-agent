@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 from jose import JWTError, jwt
 
-from backend.app.config import backend_settings
+from app.config import backend_settings
 
 
 def hash_password(plain: str) -> str:

@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-from logistics_agent.models.domain import (
+from agent.models.domain import (
     ChannelPriceRequest,
     CreateOrderRequest,
     DeleteOrderRequest,
@@ -27,7 +27,7 @@ from logistics_agent.models.domain import (
     QueryOrdersRequest,
     TrackRequest,
 )
-from logistics_agent.providers.base import LogisticsProvider
+from agent.providers.base import LogisticsProvider
 
 logger = logging.getLogger(__name__)
 

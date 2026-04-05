@@ -564,6 +564,7 @@ cython_debug/
 .adk/
 .ruff_cache/
 .venv/
+backend/.venv/
 
 # Frontend (Next.js)
 frontend/.next/

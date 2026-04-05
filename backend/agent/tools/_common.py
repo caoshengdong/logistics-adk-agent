@@ -10,8 +10,8 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from logistics_agent.providers.factory import get_provider, get_provider_for_user
-from logistics_agent.services.logistics_service import LogisticsService
+from agent.providers.factory import get_provider, get_provider_for_user
+from agent.services.logistics_service import LogisticsService
 
 if TYPE_CHECKING:
     from google.adk.tools import ToolContext

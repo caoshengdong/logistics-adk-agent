@@ -1,12 +1,13 @@
 """Order lifecycle tools: create, query, delete."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from google.adk.tools import ToolContext
 
-from logistics_agent.services.logistics_service import LogisticsService
-from logistics_agent.tools._common import resolve_service
+from agent.services.logistics_service import LogisticsService
+from agent.tools._common import resolve_service
 
 
 def create_order(
@@ -57,16 +58,27 @@ def create_order(
 
 
 def query_orders(
-    begcreatedate: str, endcreatedate: str, page: int = 1, limit: int = 10,
+    begcreatedate: str = "", endcreatedate: str = "",
+    page: int = 1, limit: int = 10,
     tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Query orders by creation date range with pagination (分页查询运单).
+
+    When the user asks for "recent orders" without specifying dates, you can
+    call this tool WITHOUT providing begcreatedate/endcreatedate — it will
+    automatically default to the last 14 days.
+
     Args:
-        begcreatedate: Start date "YYYY-MM-DD HH:MM:SS".
-        endcreatedate: End date "YYYY-MM-DD HH:MM:SS".
+        begcreatedate: Start date "YYYY-MM-DD HH:MM:SS". Defaults to 14 days ago if empty.
+        endcreatedate: End date "YYYY-MM-DD HH:MM:SS". Defaults to now if empty.
         page: Page number starting from 1.
         limit: Number of orders per page (max 100).
     """
+    now = datetime.now(tz=timezone.utc)
+    if not endcreatedate:
+        endcreatedate = now.strftime("%Y-%m-%d %H:%M:%S")
+    if not begcreatedate:
+        begcreatedate = (now - timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S")
     try:
         return resolve_service(tool_context).query_orders({
             "begcreatedate": begcreatedate, "endcreatedate": endcreatedate,
