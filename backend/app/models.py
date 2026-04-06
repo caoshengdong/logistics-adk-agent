@@ -93,7 +93,9 @@ class Artifact(Base):
     )
     filename: Mapped[str] = mapped_column(String(256), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    content_type: Mapped[str] = mapped_column(String(128), nullable=False, default="application/pdf")
+    content_type: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="application/pdf",
+    )
     data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 

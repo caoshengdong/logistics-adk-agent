@@ -102,7 +102,9 @@ class LogisticsService:
         return {"status": "success", **result}
 
     # ----- 生成报价单 PDF -----
-    def generate_quotation_pdf(self, query_payload: dict[str, Any]) -> tuple[bytes, str, dict[str, Any]]:
+    def generate_quotation_pdf(
+        self, query_payload: dict[str, Any],
+    ) -> tuple[bytes, str, dict[str, Any]]:
         """Query prices and generate a PDF quotation.
 
         Returns

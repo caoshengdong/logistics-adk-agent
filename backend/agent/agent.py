@@ -150,7 +150,13 @@ pricing_agent = Agent(
         "If the user wants to place an order, let them "
         "know you will hand off to the order specialist."
     ),
-    tools=[estimate_shipping_cost, query_price, query_channels, query_destinations, generate_quotation_pdf],
+    tools=[
+        estimate_shipping_cost,
+        query_price,
+        query_channels,
+        query_destinations,
+        generate_quotation_pdf,
+    ],
 )
 
 # ---------------------------------------------------------------------------

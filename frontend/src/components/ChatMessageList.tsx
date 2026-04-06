@@ -373,7 +373,7 @@ export default function ChatMessageList({ messages, streaming, agentSteps, sendi
         {/* Thinking dots — shown after user message before any response */}
         {isWaiting && <ThinkingIndicator />}
 
-        {/* Scroll anchor — must be inside the overflow-y-auto container */}
+        {/* Scroll anchor — must be inside thoe verflow-y-auto container */}
         <div ref={bottomRef} />
       </div>
     </div>

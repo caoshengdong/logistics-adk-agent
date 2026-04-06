@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional, Union
+from typing import Any
 
 from google.adk.artifacts.base_artifact_service import (
     ArtifactVersion,
@@ -21,7 +21,8 @@ from google.adk.artifacts.base_artifact_service import (
     ensure_part,
 )
 from google.genai import types
-from sqlalchemy import create_engine, select, delete as sa_delete
+from sqlalchemy import create_engine, select
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.orm import Session
 
 from app.config import backend_settings
@@ -137,9 +138,9 @@ class DBArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        artifact: Union[types.Part, dict[str, Any]],
-        session_id: Optional[str] = None,
-        custom_metadata: Optional[dict[str, Any]] = None,
+        artifact: types.Part | dict[str, Any],
+        session_id: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
     ) -> int:
         artifact = ensure_part(artifact)
 
@@ -197,9 +198,9 @@ class DBArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        session_id: Optional[str] = None,
-        version: Optional[int] = None,
-    ) -> Optional[types.Part]:
+        session_id: str | None = None,
+        version: int | None = None,
+    ) -> types.Part | None:
         if session_id is None:
             return None
 
@@ -234,7 +235,7 @@ class DBArtifactService(BaseArtifactService):
         *,
         app_name: str,
         user_id: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> list[str]:
         with self._get_session() as db:
             query = select(Artifact.filename).distinct()
@@ -255,7 +256,7 @@ class DBArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> None:
         with self._get_session() as db:
             stmt = sa_delete(Artifact).where(
@@ -277,7 +278,7 @@ class DBArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> list[int]:
         with self._get_session() as db:
             query = (
@@ -301,7 +302,7 @@ class DBArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> list[ArtifactVersion]:
         with self._get_session() as db:
             query = (
@@ -335,9 +336,9 @@ class DBArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        session_id: Optional[str] = None,
-        version: Optional[int] = None,
-    ) -> Optional[ArtifactVersion]:
+        session_id: str | None = None,
+        version: int | None = None,
+    ) -> ArtifactVersion | None:
         with self._get_session() as db:
             query = select(Artifact).where(Artifact.filename == filename)
             if session_id:

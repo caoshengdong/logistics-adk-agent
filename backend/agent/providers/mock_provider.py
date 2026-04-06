@@ -635,7 +635,10 @@ class MockLogisticsProvider(LogisticsProvider):
         pdf.set_y(10)
         pdf.cell(0, 10, "Logistics AI", align="L", new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 11)
-        pdf.cell(0, 7, "Shipping Quotation / Quotation Sheet", align="L", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(
+            0, 7, "Shipping Quotation / Quotation Sheet",
+            align="L", new_x="LMARGIN", new_y="NEXT",
+        )
 
         # Date on the right side of the header
         pdf.set_xy(130, 12)

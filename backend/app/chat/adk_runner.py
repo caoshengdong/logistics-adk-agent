@@ -318,7 +318,10 @@ async def run_agent_stream(
                             # partials were streamed (otherwise it's a duplicate
                             # of the already-streamed content).
                             if not has_streamed_partial:
-                                if last_text_author is not None and event_author != last_text_author:
+                                if (
+                                    last_text_author is not None
+                                    and event_author != last_text_author
+                                ):
                                     yield ("text_reset", "")
                                 last_text_author = event_author
                                 yield ("text", part.text)
@@ -346,7 +349,9 @@ async def run_agent_stream(
                             yield ("artifact", _json.dumps({
                                 "artifact_id": resp["artifact_id"],
                                 "filename": resp.get("filename", "download"),
-                                "content_type": resp.get("content_type", "application/octet-stream"),
+                                "content_type": resp.get(
+                                    "content_type", "application/octet-stream",
+                                ),
                                 "size": resp.get("size", 0),
                             }))
 
