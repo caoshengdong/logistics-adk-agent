@@ -53,3 +53,9 @@ class LogisticsProvider(ABC):
     @abstractmethod
     def delete_order(self, request: DeleteOrderRequest) -> dict[str, Any]:
         raise NotImplementedError
+
+    @abstractmethod
+    def generate_quotation_pdf(self, price_data: dict[str, Any]) -> bytes:
+        """Generate a quotation PDF from price query results and return raw bytes."""
+        raise NotImplementedError
+

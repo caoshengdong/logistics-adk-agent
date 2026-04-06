@@ -162,3 +162,14 @@ class HttpLogisticsProvider(LogisticsProvider):
         elif request.systemnumber:
             datas["systemnumber"] = request.systemnumber
         return self._post("/api/order/delete", {"datas": datas})
+
+    def generate_quotation_pdf(self, price_data: dict[str, Any]) -> bytes:
+        """Generate a quotation PDF locally (no remote API for PDF generation).
+
+        Delegates to MockLogisticsProvider's PDF generation since this is a
+        client-side presentation concern, not a logistics API operation.
+        """
+        from agent.providers.mock_provider import MockLogisticsProvider
+
+        return MockLogisticsProvider().generate_quotation_pdf(price_data)
+

@@ -24,6 +24,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from agent.agent import root_agent
+from app.chat.db_artifact_service import DBArtifactService
 from app.config import backend_settings
 from app.models import User
 
@@ -37,11 +38,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 session_service = InMemorySessionService()
+artifact_service = DBArtifactService()
 
 runner = Runner(
     agent=root_agent,
     app_name=backend_settings.adk_app_name,
     session_service=session_service,
+    artifact_service=artifact_service,
 )
 
 # Name of the root agent — used as author when reconstructing assistant events
@@ -72,6 +75,8 @@ def _refresh_session_credentials(user: User, session_id: str) -> None:
     internal.state["auth_token"] = user.auth_token
     internal.state["customer_code"] = user.customer_code
     internal.state["customer_name"] = user.display_name
+    internal.state["_session_id"] = session_id
+    internal.state["_user_id"] = user.id
 
 
 async def get_or_create_session(
@@ -117,6 +122,9 @@ async def get_or_create_session(
         "auth_token": user.auth_token,
         "customer_code": user.customer_code,
         "customer_name": user.display_name,
+        # ── Internal IDs (used by tools to save artifacts directly) ──
+        "_session_id": session_id,
+        "_user_id": user.id,
         # ── Working-memory keys (populated by tools as they run) ──
         "last_waybill": "",
         "last_order_channel": "",
@@ -225,6 +233,7 @@ async def _replay_history(session, db_messages: list[ChatMessage]) -> None:
 # refresh and must NEVER be persisted in the DB state snapshot.
 _EPHEMERAL_KEYS = frozenset({
     "auth_code", "auth_token", "customer_code", "customer_name",
+    "_session_id", "_user_id",
 })
 
 
@@ -259,6 +268,7 @@ async def run_agent_stream(
         ``("text_reset", "")``           — new speaker; clear accumulated text
         ``("tool_call", json_string)``   — agent invoked a tool
         ``("tool_result", json_string)`` — tool returned a result
+        ``("artifact", json_string)``    — an artifact (e.g. PDF) was saved
         ``("state_snapshot", json)``     — working-memory snapshot for persistence
         ``("session_id", id)``           — final event with session id
     """
@@ -282,60 +292,82 @@ async def run_agent_stream(
     # text to avoid sending the content twice.
     has_streamed_partial = False
 
-    async for event in runner.run_async(
-        user_id=user.id,
-        session_id=session.id,
-        new_message=content,
-        run_config=run_config,
-    ):
-        event_author = getattr(event, "author", None) or ""
-        is_partial = getattr(event, "partial", None) is True
+    try:
+        async for event in runner.run_async(
+            user_id=user.id,
+            session_id=session.id,
+            new_message=content,
+            run_config=run_config,
+        ):
+            event_author = getattr(event, "author", None) or ""
+            is_partial = getattr(event, "partial", None) is True
 
-        if event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text:
-                    if is_partial:
-                        # Partial event — stream the incremental delta
-                        if last_text_author is not None and event_author != last_text_author:
-                            yield ("text_reset", "")
-                            has_streamed_partial = False
-                        last_text_author = event_author
-                        has_streamed_partial = True
-                        yield ("text", part.text)
-                    else:
-                        # Final (non-partial) event — only yield if no
-                        # partials were streamed (otherwise it's a duplicate
-                        # of the already-streamed content).
-                        if not has_streamed_partial:
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        if is_partial:
+                            # Partial event — stream the incremental delta
                             if last_text_author is not None and event_author != last_text_author:
                                 yield ("text_reset", "")
+                                has_streamed_partial = False
                             last_text_author = event_author
+                            has_streamed_partial = True
                             yield ("text", part.text)
-                        # Reset for the next streaming segment
-                        has_streamed_partial = False
+                        else:
+                            # Final (non-partial) event — only yield if no
+                            # partials were streamed (otherwise it's a duplicate
+                            # of the already-streamed content).
+                            if not has_streamed_partial:
+                                if (
+                                    last_text_author is not None
+                                    and event_author != last_text_author
+                                ):
+                                    yield ("text_reset", "")
+                                last_text_author = event_author
+                                yield ("text", part.text)
+                            # Reset for the next streaming segment
+                            has_streamed_partial = False
 
-                # Tool calls / results only appear in non-partial events;
-                # partial function_call parts are incomplete and must be
-                # skipped (ADK does not execute them either).
-                if not is_partial and part.function_call:
-                    fc = part.function_call
-                    yield ("tool_call", _json.dumps({
-                        "name": fc.name,
-                        "args": dict(fc.args) if fc.args else {},
-                    }))
+                    # Tool calls / results only appear in non-partial events;
+                    # partial function_call parts are incomplete and must be
+                    # skipped (ADK does not execute them either).
+                    if not is_partial and part.function_call:
+                        fc = part.function_call
+                        yield ("tool_call", _json.dumps({
+                            "name": fc.name,
+                            "args": dict(fc.args) if fc.args else {},
+                        }))
 
-                if not is_partial and part.function_response:
-                    fr = part.function_response
-                    resp_str = _json.dumps(
-                        fr.response if fr.response else {},
-                        ensure_ascii=False, default=str,
-                    )
-                    if len(resp_str) > 800:
-                        resp_str = resp_str[:800] + "…"
-                    yield ("tool_result", _json.dumps({
-                        "name": fr.name,
-                        "response": resp_str,
-                    }))
+                    if not is_partial and part.function_response:
+                        fr = part.function_response
+                        resp = fr.response if fr.response else {}
+
+                        # Detect artifact info returned by tools (e.g.
+                        # generate_quotation_pdf saves PDF to DB and returns
+                        # artifact_id in the response dict).
+                        if isinstance(resp, dict) and resp.get("artifact_id"):
+                            yield ("artifact", _json.dumps({
+                                "artifact_id": resp["artifact_id"],
+                                "filename": resp.get("filename", "download"),
+                                "content_type": resp.get(
+                                    "content_type", "application/octet-stream",
+                                ),
+                                "size": resp.get("size", 0),
+                            }))
+
+                        resp_str = _json.dumps(
+                            resp, ensure_ascii=False, default=str,
+                        )
+                        if len(resp_str) > 800:
+                            resp_str = resp_str[:800] + "…"
+                        yield ("tool_result", _json.dumps({
+                            "name": fr.name,
+                            "response": resp_str,
+                        }))
+
+    except Exception:
+        logger.exception("Error during agent execution for session %s", session_id)
+        yield ("text", "\n\n⚠️ An error occurred while processing your request. Please try again.")
 
     # ── Snapshot working-memory state for DB persistence ──
     # Re-fetch the session to get the latest state (after tool mutations).

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -70,3 +70,32 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     session: Mapped[ChatSession] = relationship(back_populates="messages")
+
+
+class Artifact(Base):
+    """Stores generated artifacts (e.g. PDF quotations) as versioned blobs.
+
+    Each (session_id, filename, version) triple is unique.  The ADK artifact
+    service appends versions starting from 0.
+    """
+
+    __tablename__ = "artifacts"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_uuid)
+    session_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    message_id: Mapped[str | None] = mapped_column(
+        String(32), ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    filename: Mapped[str] = mapped_column(String(256), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    content_type: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="application/pdf",
+    )
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+

@@ -6,13 +6,13 @@ import { chatStream, listSessions, getSessionMessages, deleteSession } from "@/l
 import { useTypewriter } from "@/hooks/useTypewriter";
 import ChatMessageList from "@/components/ChatMessageList";
 import ChatInput from "@/components/ChatInput";
-import type { ChatSession, ChatMessage } from "@/types";
+import type { ChatSession, ChatMessage, ArtifactInfo } from "@/types";
 
 /** Lightweight step indicator for tool / sub-agent activity */
 interface AgentStep { name: string; status: "running" | "done"; }
 
 /** Pending commit: waiting for typewriter to finish before committing to messages */
-interface PendingCommit { text: string; newSessionId: string | undefined; }
+interface PendingCommit { text: string; newSessionId: string | undefined; artifacts?: ArtifactInfo[]; }
 
 export default function ChatPage() {
   const router = useRouter();
@@ -44,6 +44,7 @@ export default function ChatPage() {
         role: "assistant" as const,
         content: pending.text,
         created_at: new Date().toISOString(),
+        artifacts: pending.artifacts,
       }]);
     }
     if (pending.newSessionId && pending.newSessionId !== activeSessionId) {
@@ -98,6 +99,7 @@ export default function ChatPage() {
 
     let fullText = "";
     let newSessionId = activeSessionId;
+    const pendingArtifacts: ArtifactInfo[] = [];
     try {
       for await (const ev of chatStream(text, activeSessionId)) {
         if (ev.type === "text" && ev.content) {
@@ -119,6 +121,13 @@ export default function ChatPage() {
               prev.map((s) => s.name === tr.name && s.status === "running" ? { ...s, status: "done" } : s)
             );
           } catch {}
+        } else if (ev.type === "artifact" && ev.artifact_id) {
+          pendingArtifacts.push({
+            artifact_id: ev.artifact_id,
+            filename: ev.filename || "download",
+            content_type: ev.content_type || "application/octet-stream",
+            size: ev.size || 0,
+          });
         } else if (ev.type === "done") {
           newSessionId = ev.session_id || newSessionId;
         }
@@ -135,7 +144,7 @@ export default function ChatPage() {
         pushText(fullText);
         // Schedule commit — the useEffect above will fire when
         // streamingText catches up to fullText
-        pendingCommitRef.current = { text: fullText, newSessionId };
+        pendingCommitRef.current = { text: fullText, newSessionId, artifacts: pendingArtifacts.length > 0 ? pendingArtifacts : undefined };
       } else {
         // No response text at all — just clean up
         resetTypewriter();
@@ -258,7 +267,7 @@ export default function ChatPage() {
           )}
         </div>
 
-        <ChatMessageList messages={messages} streaming={streamingText} agentSteps={agentSteps} onSuggestionClick={handleSend} />
+        <ChatMessageList messages={messages} streaming={streamingText} agentSteps={agentSteps} sending={sending} onSuggestionClick={handleSend} />
         <ChatInput onSend={handleSend} disabled={sending} />
       </div>
     </div>
