@@ -1,7 +1,9 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { downloadArtifact } from "@/lib/api";
+import type { ArtifactInfo } from "@/types";
 
 interface Message {
   id?: string;
@@ -10,6 +12,7 @@ interface Message {
   toolName?: string;
   toolArgs?: Record<string, unknown>;
   toolResponse?: string;
+  artifacts?: ArtifactInfo[];
 }
 
 interface AgentStep {
@@ -21,6 +24,7 @@ interface Props {
   messages: Message[];
   streaming?: string;
   agentSteps?: AgentStep[];
+  sending?: boolean;
   onSuggestionClick?: (text: string) => void;
 }
 
@@ -59,6 +63,7 @@ const TOOL_LABELS: Record<string, string> = {
   query_price: "Comparing prices",
   query_channels: "Loading channels",
   query_destinations: "Searching destinations",
+  generate_quotation_pdf: "Generating PDF quotation",
 };
 
 function friendlyName(toolName: string): string {
@@ -149,15 +154,109 @@ function EmptyState({ onSuggestionClick }: { onSuggestionClick?: (text: string) 
   );
 }
 
+/* ── Artifact helpers ─────────────────────────────────── */
+
+/**
+ * Pre-process markdown content: wrap bare artifact filenames in markdown
+ * link syntax so the custom `a` renderer always catches them — regardless
+ * of whether the LLM output them as a link or plain text.
+ */
+function linkifyArtifacts(content: string, artifacts: ArtifactInfo[]): string {
+  if (artifacts.length === 0) return content;
+  let result = content;
+  for (const art of artifacts) {
+    // Already wrapped in a markdown link → skip
+    if (result.includes(`[${art.filename}](`)) continue;
+    // Replace bare filename with markdown link
+    result = result.split(art.filename).join(`[${art.filename}](${art.filename})`);
+  }
+  return result;
+}
+
+/** Extract plain text from a React children prop (string, number, array, or element). */
+function extractText(node: React.ReactNode): string {
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractText).join("");
+  if (node && typeof node === "object" && "props" in node) {
+    return extractText((node as React.ReactElement).props.children);
+  }
+  return "";
+}
+
+/** Find a matching artifact by filename, href, or `artifact:ID` pattern. */
+function findArtifact(allArtifacts: ArtifactInfo[], href?: string, children?: React.ReactNode): ArtifactInfo | undefined {
+  if (allArtifacts.length === 0) return undefined;
+  const childText = extractText(children);
+
+  // 1. Match by href === filename
+  // 2. Match by link text === filename
+  // 3. Match by artifact:ID href pattern
+  const artifactIdMatch = href?.match(/^artifact:(.+)$/);
+  return allArtifacts.find(
+    (a) =>
+      a.filename === href ||
+      a.filename === childText ||
+      (artifactIdMatch && a.artifact_id === artifactIdMatch[1]),
+  );
+}
+
+/* ── Artifact download card ──────────────────────────── */
+
+function ArtifactCard({ artifact }: { artifact: ArtifactInfo }) {
+  const sizeKB = artifact.size ? (artifact.size / 1024).toFixed(1) : "?";
+  const isPdf = artifact.content_type === "application/pdf";
+
+  return (
+    <div className="mt-2 flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 max-w-xs">
+      <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+        {isPdf ? (
+          <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zM6 20V4h5v7h7v9H6z" />
+            <text x="7" y="18" fontSize="6" fontWeight="bold" fill="currentColor">PDF</text>
+          </svg>
+        ) : (
+          <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+          </svg>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium text-gray-800 truncate">{artifact.filename}</p>
+        <p className="text-[10px] text-gray-500">{sizeKB} KB</p>
+      </div>
+      <button
+        onClick={() => downloadArtifact(artifact.artifact_id, artifact.filename)}
+        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow-md active:scale-95"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+        Download
+      </button>
+    </div>
+  );
+}
+
 /* ── Main Component ─────────────────────────────────── */
 
-export default function ChatMessageList({ messages, streaming, agentSteps, onSuggestionClick }: Props) {
+export default function ChatMessageList({ messages, streaming, agentSteps, sending, onSuggestionClick }: Props) {
   const hasActiveSteps = agentSteps && agentSteps.length > 0;
-  const isWaiting = !streaming && !hasActiveSteps &&
+  const isWaiting = !!sending && !streaming && !hasActiveSteps &&
     messages.length > 0 && messages[messages.length - 1].role === "user";
 
   // Filter out tool messages from history (they are transient UI state now)
   const visibleMessages = messages.filter((m) => m.role !== "tool");
+
+  // Collect ALL artifacts across every message so any message can reference
+  // any artifact (e.g. when user asks agent to "re-send the PDF").
+  const allArtifacts = useMemo(() => {
+    const arts: ArtifactInfo[] = [];
+    for (const m of messages) {
+      if (m.artifacts) arts.push(...m.artifacts);
+    }
+    return arts;
+  }, [messages]);
 
   // Auto-scroll: ref at the bottom of the scrollable container
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -187,20 +286,59 @@ export default function ChatMessageList({ messages, streaming, agentSteps, onSug
                 {isUser ? (
                   <span className="whitespace-pre-wrap">{msg.content}</span>
                 ) : (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    className="prose prose-sm max-w-none prose-headings:mb-2 prose-headings:mt-3
-                               prose-p:mb-2 prose-li:my-0.5 prose-img:rounded-xl"
-                    components={{
-                      table: ({ children, ...props }) => (
-                        <div className="overflow-x-auto -mx-1">
-                          <table {...props}>{children}</table>
-                        </div>
-                      ),
-                    }}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
+                  <>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      className="prose prose-sm max-w-none prose-headings:mb-2 prose-headings:mt-3
+                                 prose-p:mb-2 prose-li:my-0.5 prose-img:rounded-xl"
+                      components={{
+                        table: ({ children, ...props }) => (
+                          <div className="overflow-x-auto -mx-1">
+                            <table {...props}>{children}</table>
+                          </div>
+                        ),
+                        a: ({ href, children }) => {
+                          // Match against ALL session artifacts (not just this message's)
+                          const matchedArt = findArtifact(allArtifacts, href, children);
+                          if (matchedArt) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => downloadArtifact(matchedArt.artifact_id, matchedArt.filename)}
+                                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800
+                                           font-medium underline underline-offset-2 decoration-blue-300
+                                           hover:decoration-blue-500 transition-colors cursor-pointer"
+                              >
+                                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                </svg>
+                                {children}
+                              </button>
+                            );
+                          }
+                          // Real URL → open in new tab
+                          if (href && /^https?:\/\//.test(href)) {
+                            return (
+                              <a href={href} target="_blank" rel="noopener noreferrer">
+                                {children}
+                              </a>
+                            );
+                          }
+                          // Unknown relative link → render as inert text
+                          return <span className="font-medium text-blue-600">{children}</span>;
+                        },
+                      }}
+                    >
+                      {linkifyArtifacts(msg.content, allArtifacts)}
+                    </ReactMarkdown>
+                    {msg.artifacts && msg.artifacts.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        {msg.artifacts.map((art) => (
+                          <ArtifactCard key={art.artifact_id} artifact={art} />
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -215,7 +353,18 @@ export default function ChatMessageList({ messages, streaming, agentSteps, onSug
           <div className="msg-appear flex gap-3 items-start">
             <BotIcon />
             <div className="max-w-[80%] px-4 py-3 rounded-2xl rounded-tl-sm bg-white border border-gray-100/80 shadow-sm text-sm leading-relaxed">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-sm max-w-none">{streaming}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                className="prose prose-sm max-w-none"
+                components={{
+                  a: ({ href, children, ...props }) => {
+                    if (href && /^https?:\/\//.test(href)) {
+                      return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+                    }
+                    return <span className="font-medium text-blue-600">{children}</span>;
+                  },
+                }}
+              >{streaming}</ReactMarkdown>
               <span className="streaming-cursor" />
             </div>
           </div>

@@ -20,6 +20,7 @@ from agent.tools.order_tools import (
 )
 from agent.tools.pricing_tools import (
     estimate_shipping_cost,
+    generate_quotation_pdf,
     query_channels,
     query_destinations,
     query_price,
@@ -120,7 +121,8 @@ pricing_agent = Agent(
     description=(
         "Pricing and quotation agent responsible for "
         "shipping cost estimation, multi-channel price "
-        "comparison, and channel/destination lookup."
+        "comparison, channel/destination lookup, and "
+        "generating downloadable PDF quotation sheets."
     ),
     instruction=(
         "You are a Pricing & Quotation Specialist handling "
@@ -136,14 +138,19 @@ pricing_agent = Agent(
         "channels to help the user pick the most "
         "cost-effective option.\n"
         "- **estimate_shipping_cost**: Estimate the precise "
-        "cost breakdown for a specific channel.\n\n"
+        "cost breakdown for a specific channel.\n"
+        "- **generate_quotation_pdf**: Generate a "
+        "downloadable PDF quotation sheet comparing prices "
+        "across channels. Use this when the user asks to "
+        "'generate a quotation', 'download a quote', "
+        "'export pricing to PDF', or similar requests.\n\n"
         "When responding: sort channels from lowest to "
         "highest price, and include transit time and "
         "total cost.\n"
         "If the user wants to place an order, let them "
         "know you will hand off to the order specialist."
     ),
-    tools=[estimate_shipping_cost, query_price, query_channels, query_destinations],
+    tools=[estimate_shipping_cost, query_price, query_channels, query_destinations, generate_quotation_pdf],
 )
 
 # ---------------------------------------------------------------------------
@@ -193,14 +200,16 @@ root_agent = Agent(
         "breakdown.\n"
         "3. **pricing_agent** (Pricing Specialist): handles "
         "cost estimation, multi-channel price comparison, "
-        "channel lookup, and destination lookup.\n\n"
+        "channel lookup, destination lookup, and generating "
+        "downloadable PDF quotation sheets.\n\n"
         "Routing rules:\n"
         "- Order list / create order / place order / "
         "delete order → route to order_agent\n"
         "- Track shipment / trajectory / order status / "
         "fee breakdown → route to tracking_agent\n"
         "- Quote / shipping cost / cheapest channel / "
-        "available channels / destinations → "
+        "available channels / destinations / "
+        "generate quotation PDF / download quote → "
         "route to pricing_agent\n\n"
         "**IMPORTANT: Error handling**\n"
         "- When a sub-agent reports that a number is invalid "

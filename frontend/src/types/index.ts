@@ -26,11 +26,23 @@ export interface ChatMessage {
   toolArgs?: Record<string, unknown>;
   toolResponse?: string;
   created_at: string;
+  artifacts?: ArtifactInfo[];
+}
+
+export interface ArtifactInfo {
+  artifact_id: string;
+  filename: string;
+  content_type: string;
+  size: number;
 }
 
 export interface SSEEvent {
-  type: "text" | "text_reset" | "done" | "tool_call" | "tool_result";
+  type: "text" | "text_reset" | "done" | "tool_call" | "tool_result" | "artifact";
   content?: string;
   session_id?: string;
+  artifact_id?: string;
+  filename?: string;
+  content_type?: string;
+  size?: number;
 }
 

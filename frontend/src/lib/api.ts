@@ -1,5 +1,5 @@
 import { getToken, removeToken } from "./auth";
-import type { ChatSession, ChatMessage, SSEEvent, TokenResponse, User } from "@/types";
+import type { ChatSession, ChatMessage, SSEEvent, TokenResponse, User, ArtifactInfo } from "@/types";
 
 /**
  * API base URL:
@@ -137,5 +137,37 @@ export async function* chatStream(
       }
     }
   }
+}
+
+/**
+ * Download an artifact (e.g. PDF quotation) by its ID.
+ * Triggers a browser file download.
+ */
+export async function downloadArtifact(artifactId: string, filename?: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/chat/artifacts/${artifactId}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (res.status === 401) {
+    removeToken();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+  if (!res.ok) {
+    throw new Error(`Download failed: ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "download";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 

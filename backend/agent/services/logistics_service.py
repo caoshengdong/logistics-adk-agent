@@ -101,6 +101,30 @@ class LogisticsService:
         result = self.provider.delete_order(request)
         return {"status": "success", **result}
 
+    # ----- 生成报价单 PDF -----
+    def generate_quotation_pdf(self, query_payload: dict[str, Any]) -> tuple[bytes, str, dict[str, Any]]:
+        """Query prices and generate a PDF quotation.
+
+        Returns
+        -------
+        tuple[bytes, str, dict]
+            (pdf_bytes, filename, price_result)
+        """
+        from agent.models.domain import now_utc
+
+        request = PriceQueryRequest.model_validate(query_payload)
+        logger.info("generate_quotation_pdf dest=%s weight=%s", request.dest, request.weight)
+        price_result = self.provider.query_price(request)
+
+        # Attach query params for the PDF renderer
+        price_data = {**price_result, "query_params": query_payload}
+        pdf_bytes = self.provider.generate_quotation_pdf(price_data)
+
+        date_str = now_utc().strftime("%Y%m%d")
+        filename = f"quotation_{request.dest}_{request.weight}kg_{date_str}.pdf"
+
+        return pdf_bytes, filename, price_result
+
     # ----- 错误格式化 -----
     @staticmethod
     def format_error(exc: Exception) -> dict[str, Any]:

@@ -610,3 +610,146 @@ class MockLogisticsProvider(LogisticsProvider):
                 del self.tracks[k]
 
         return {"code": 0, "msg": "删除成功"}
+
+    # --- generate_quotation_pdf ---
+    def generate_quotation_pdf(self, price_data: dict[str, Any]) -> bytes:
+        """Generate a professional quotation PDF from price query results."""
+        from fpdf import FPDF
+
+        items: list[dict[str, Any]] = price_data.get("data", [])
+        query_params = price_data.get("query_params", {})
+        dest = query_params.get("dest", "N/A")
+        weight = query_params.get("weight", "N/A")
+        piece = query_params.get("piece", 1)
+        goodstype = query_params.get("goodstype", "WPX")
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=20)
+        pdf.add_page()
+
+        # ── Header ─────────────────────────────────────────────────
+        pdf.set_fill_color(30, 58, 138)  # indigo-900
+        pdf.rect(0, 0, 210, 42, "F")
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 22)
+        pdf.set_y(10)
+        pdf.cell(0, 10, "Logistics AI", align="L", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 11)
+        pdf.cell(0, 7, "Shipping Quotation / Quotation Sheet", align="L", new_x="LMARGIN", new_y="NEXT")
+
+        # Date on the right side of the header
+        pdf.set_xy(130, 12)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 7, f"Date: {now_utc().strftime('%Y-%m-%d')}", align="R")
+        pdf.set_xy(130, 19)
+        valid_date = (now_utc() + timedelta(days=7)).strftime("%Y-%m-%d")
+        pdf.cell(0, 7, f"Valid Until: {valid_date}", align="R")
+
+        pdf.ln(20)
+
+        # ── Query Parameters ───────────────────────────────────────
+        pdf.set_text_color(30, 58, 138)
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.cell(0, 10, "Quotation Details", new_x="LMARGIN", new_y="NEXT")
+
+        pdf.set_draw_color(30, 58, 138)
+        pdf.set_line_width(0.5)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(4)
+
+        pdf.set_text_color(60, 60, 60)
+        pdf.set_font("Helvetica", "", 10)
+        params_data = [
+            ("Destination", str(dest)),
+            ("Weight (KG)", str(weight)),
+            ("Pieces", str(piece)),
+            ("Goods Type", str(goodstype)),
+        ]
+        for label, value in params_data:
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(45, 7, f"{label}:", new_x="END")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+
+        pdf.ln(6)
+
+        # ── Price Comparison Table ─────────────────────────────────
+        pdf.set_text_color(30, 58, 138)
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.cell(0, 10, "Channel Price Comparison", new_x="LMARGIN", new_y="NEXT")
+
+        pdf.set_draw_color(30, 58, 138)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(3)
+
+        # Table header
+        col_widths = [45, 30, 32, 28, 28, 27]
+        headers = ["Channel", "Transit", "Freight", "Fuel", "Total", "Currency"]
+
+        pdf.set_fill_color(240, 244, 255)
+        pdf.set_text_color(30, 58, 138)
+        pdf.set_font("Helvetica", "B", 9)
+        for i, h in enumerate(headers):
+            pdf.cell(col_widths[i], 8, h, border=1, align="C", fill=True, new_x="END")
+        pdf.ln()
+
+        # Table rows
+        pdf.set_text_color(40, 40, 40)
+        pdf.set_font("Helvetica", "", 9)
+
+        # Sort by totalCost ascending
+        sorted_items = sorted(items, key=lambda x: x.get("totalCost", 0))
+
+        for idx, item in enumerate(sorted_items):
+            ch = item.get("channel", {})
+            channel_name = ch.get("channelnameen") or ch.get("channelid", "")
+            # Convert aging to ASCII-safe format (e.g. "3-5天" → "3-5 days")
+            aging_raw = ch.get("aging", "N/A")
+            aging = aging_raw.replace("天", " days").replace("周", " weeks") if aging_raw else "N/A"
+            tran_cost = f"{item.get('tranCost', 0):.2f}"
+            fuel_cost = f"{item.get('fuelCost', 0):.2f}"
+            total_cost = f"{item.get('totalCost', 0):.2f}"
+            ccy = item.get("totalCostCcy", "RMB")
+
+            # Alternate row color
+            if idx % 2 == 0:
+                pdf.set_fill_color(250, 250, 255)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+
+            # Highlight cheapest row
+            if idx == 0:
+                pdf.set_fill_color(220, 252, 231)  # green-100
+                pdf.set_font("Helvetica", "B", 9)
+            else:
+                pdf.set_font("Helvetica", "", 9)
+
+            row_data = [channel_name, aging, tran_cost, fuel_cost, total_cost, ccy]
+            for j, val in enumerate(row_data):
+                align = "L" if j == 0 else "C"
+                pdf.cell(col_widths[j], 7, val, border=1, align=align, fill=True, new_x="END")
+            pdf.ln()
+
+        pdf.ln(8)
+
+        # ── Footer Notes ───────────────────────────────────────────
+        pdf.set_text_color(120, 120, 120)
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.multi_cell(0, 5, (
+            "Notes:\n"
+            "1. Prices are estimates and may vary based on actual weight and dimensions.\n"
+            "2. Fuel surcharge rates are subject to periodic adjustment.\n"
+            "3. This quotation is valid for 7 days from the date of issue.\n"
+            "4. Additional fees (remote area surcharge, customs duties, etc.) may apply."
+        ))
+
+        # Bottom bar
+        pdf.set_y(-15)
+        pdf.set_fill_color(30, 58, 138)
+        pdf.rect(0, pdf.get_y(), 210, 15, "F")
+        pdf.set_text_color(200, 210, 255)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.cell(0, 5, "Generated by Logistics AI Agent", align="C")
+
+        return pdf.output()
+
